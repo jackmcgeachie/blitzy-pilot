@@ -1,0 +1,816 @@
+# ==============================================================================
+# CardDemo Spring Boot Application Configuration
+# ==============================================================================
+# Primary Spring Boot configuration file containing all application properties,
+# database connections, Redis session configuration, security settings, and
+# batch processing parameters. Replaces mainframe CICS region configurations
+# and provides centralized configuration management for the modular monolith.
+# ==============================================================================
+
+# ==============================================================================
+# SPRING BOOT CORE CONFIGURATION
+# ==============================================================================
+spring:
+  application:
+    name: carddemo-application
+    version: @project.version@
+  
+  # Spring Boot 3.2.x configuration for Java 21 compatibility
+  main:
+    web-application-type: servlet
+    allow-bean-definition-overriding: false
+    lazy-initialization: false
+  
+  # Bean configuration for enterprise features
+  beans:
+    overriding: false
+  
+  # Profile configuration for multi-environment deployment
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:development}
+
+# ==============================================================================
+# DATABASE CONFIGURATION
+# ==============================================================================
+# PostgreSQL 15+ database connection configuration with optimized performance
+# settings replacing VSAM dataset definitions
+# ==============================================================================
+spring:
+  datasource:
+    # Primary PostgreSQL database connection
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:carddemo}
+    username: ${DB_USERNAME:carddemo_user}
+    password: ${DB_PASSWORD:carddemo_pass}
+    driver-class-name: org.postgresql.Driver
+    
+    # HikariCP connection pool configuration supporting 10,000+ TPS requirements
+    hikari:
+      # Performance optimizations for high-throughput transaction processing
+      maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:20}
+      minimum-idle: ${HIKARI_MIN_IDLE:5}
+      connection-timeout: ${HIKARI_CONNECTION_TIMEOUT:30000}
+      idle-timeout: ${HIKARI_IDLE_TIMEOUT:600000}
+      max-lifetime: ${HIKARI_MAX_LIFETIME:1800000}
+      leak-detection-threshold: ${HIKARI_LEAK_DETECTION:60000}
+      
+      # Connection validation for reliability
+      validation-timeout: 5000
+      connection-test-query: SELECT 1
+      
+      # Pool naming for monitoring
+      pool-name: CardDemoHikariCP
+      
+      # Connection properties for PostgreSQL optimization
+      data-source-properties:
+        cachePrepStmts: true
+        prepStmtCacheSize: 250
+        prepStmtCacheSqlLimit: 2048
+        useServerPrepStmts: true
+        useLocalSessionState: true
+        rewriteBatchedStatements: true
+        cacheResultSetMetadata: true
+        cacheServerConfiguration: true
+        elideSetAutoCommits: true
+        maintainTimeStats: false
+        
+  # JPA configuration for Spring Data repositories
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:validate}
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.SnakeCasePhysicalNamingStrategy
+    
+    properties:
+      hibernate:
+        # Database dialect for PostgreSQL 15+
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        
+        # SQL formatting and logging
+        format_sql: ${HIBERNATE_FORMAT_SQL:false}
+        show_sql: ${HIBERNATE_SHOW_SQL:false}
+        use_sql_comments: ${HIBERNATE_SQL_COMMENTS:false}
+        
+        # Performance optimizations
+        jdbc:
+          batch_size: ${HIBERNATE_BATCH_SIZE:25}
+          fetch_size: ${HIBERNATE_FETCH_SIZE:50}
+          lob:
+            non_contextual_creation: true
+        
+        # Connection handling
+        connection:
+          provider_disables_autocommit: true
+        
+        # Query optimizations
+        query:
+          plan_cache_max_size: 2048
+          plan_parameter_metadata_max_size: 128
+        
+        # Statistics and monitoring
+        generate_statistics: ${HIBERNATE_STATISTICS:false}
+        session:
+          events:
+            log:
+              LOG_QUERIES_SLOWER_THAN_MS: 1000
+
+# ==============================================================================
+# FLYWAY DATABASE MIGRATION CONFIGURATION
+# ==============================================================================
+# Flyway database migration configuration for automated schema management
+# ==============================================================================
+spring:
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:true}
+    validate-on-migrate: ${FLYWAY_VALIDATE_ON_MIGRATE:true}
+    out-of-order: ${FLYWAY_OUT_OF_ORDER:false}
+    locations: classpath:db/migration
+    sql-migration-prefix: V
+    sql-migration-separator: __
+    sql-migration-suffixes: .sql
+    baseline-version: 0
+    baseline-description: Initial baseline
+    table: flyway_schema_history
+
+# ==============================================================================
+# REDIS SESSION CONFIGURATION
+# ==============================================================================
+# Redis 7+ session store configuration for distributed session management
+# replacing CICS COMMAREA pseudo-conversational state management
+# ==============================================================================
+spring:
+  data:
+    redis:
+      # Redis connection configuration
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: ${REDIS_TIMEOUT:2000}
+      
+      # Lettuce client configuration for high performance
+      lettuce:
+        pool:
+          # Connection pool settings for high throughput
+          max-active: ${REDIS_POOL_MAX_ACTIVE:8}
+          max-idle: ${REDIS_POOL_MAX_IDLE:8}
+          min-idle: ${REDIS_POOL_MIN_IDLE:2}
+          max-wait: ${REDIS_POOL_MAX_WAIT:2000}
+        
+        # Connection timeouts
+        shutdown-timeout: 100ms
+        
+        # Command timeouts
+        command-timeout: 1000ms
+  
+  # Spring Session configuration
+  session:
+    store-type: redis
+    redis:
+      # Session management configuration
+      namespace: spring:session:carddemo
+      flush-mode: on_save
+      save-mode: on_set_attribute
+      cleanup-cron: "0 */15 * * * *"
+    
+    # Session timeout (30 minutes)
+    timeout: ${SESSION_TIMEOUT:1800s}
+    
+    # Cookie configuration
+    cookie:
+      name: CARDDEMO_SESSION
+      max-age: ${SESSION_TIMEOUT:1800s}
+      http-only: true
+      secure: ${SESSION_COOKIE_SECURE:false}
+      same-site: lax
+
+# ==============================================================================
+# SPRING SECURITY CONFIGURATION
+# ==============================================================================
+# Spring Security configuration for JWT-based authentication and role-based
+# authorization replacing RACF authentication mechanisms
+# ==============================================================================
+spring:
+  security:
+    # JWT configuration
+    jwt:
+      secret: ${JWT_SECRET:carddemo-jwt-secret-key-change-in-production}
+      expiration: ${JWT_EXPIRATION:28800} # 8 hours in seconds
+      issuer: ${JWT_ISSUER:carddemo-application}
+      
+    # OAuth2 resource server configuration for JWT validation
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:}
+          jwk-set-uri: ${JWT_JWK_SET_URI:}
+
+# ==============================================================================
+# SPRING BATCH CONFIGURATION
+# ==============================================================================
+# Spring Batch configuration for chunk-oriented processing and job scheduling
+# replacing JCL job streams with 16 batch jobs
+# ==============================================================================
+spring:
+  batch:
+    # Job execution configuration
+    job:
+      enabled: ${BATCH_JOB_ENABLED:true}
+    
+    # JDBC configuration for batch metadata
+    jdbc:
+      initialize-schema: ${BATCH_INITIALIZE_SCHEMA:embedded}
+      table-prefix: BATCH_
+      isolation-level-for-create: serializable
+    
+    # Batch processing configuration
+    chunk:
+      # Default chunk size for batch processing
+      size: ${BATCH_CHUNK_SIZE:1000}
+    
+    # Job repository configuration
+    repository:
+      # Use default datasource for batch metadata
+      table-prefix: BATCH_
+      isolation-level-for-create: serializable
+
+# Batch job specific configuration
+batch:
+  jobs:
+    # Account processing jobs
+    account-data-load:
+      chunk-size: ${ACCOUNT_DATA_LOAD_CHUNK_SIZE:500}
+      skip-limit: ${ACCOUNT_DATA_LOAD_SKIP_LIMIT:10}
+      
+    account-xref-processing:
+      chunk-size: ${ACCOUNT_XREF_CHUNK_SIZE:1000}
+      skip-limit: ${ACCOUNT_XREF_SKIP_LIMIT:5}
+      
+    account-reporting:
+      chunk-size: ${ACCOUNT_REPORTING_CHUNK_SIZE:200}
+      
+    interest-calculation:
+      chunk-size: ${INTEREST_CALC_CHUNK_SIZE:500}
+      precision-scale: 2
+      
+    # Customer processing jobs
+    customer-data-load:
+      chunk-size: ${CUSTOMER_DATA_LOAD_CHUNK_SIZE:500}
+      skip-limit: ${CUSTOMER_DATA_LOAD_SKIP_LIMIT:10}
+      
+    # Transaction processing jobs
+    transaction-initialization:
+      chunk-size: ${TRANSACTION_INIT_CHUNK_SIZE:1000}
+      
+    daily-transaction-processing:
+      chunk-size: ${DAILY_TRANSACTION_CHUNK_SIZE:2000}
+      skip-limit: ${DAILY_TRANSACTION_SKIP_LIMIT:100}
+      
+    transaction-reporting:
+      chunk-size: ${TRANSACTION_REPORTING_CHUNK_SIZE:1000}
+      
+    # Statement generation jobs
+    statement-generation-phase1:
+      chunk-size: ${STATEMENT_PHASE1_CHUNK_SIZE:250}
+      
+    statement-generation-phase2:
+      chunk-size: ${STATEMENT_PHASE2_CHUNK_SIZE:100}
+      
+  # Batch execution time limits (4-hour window requirement)
+  execution:
+    timeout: ${BATCH_EXECUTION_TIMEOUT:14400} # 4 hours in seconds
+    
+  # Batch scheduling configuration
+  scheduling:
+    enabled: ${BATCH_SCHEDULING_ENABLED:true}
+    cron:
+      # Daily batch processing schedule (2 AM)
+      daily-processing: ${BATCH_DAILY_CRON:0 0 2 * * ?}
+      # Statement generation schedule (3 AM on 1st of month)
+      statement-generation: ${BATCH_STATEMENT_CRON:0 0 3 1 * ?}
+
+# ==============================================================================
+# SPRING ACTUATOR MONITORING CONFIGURATION
+# ==============================================================================
+# Spring Actuator configuration for monitoring endpoints and health checks
+# supporting comprehensive observability and SLA monitoring
+# ==============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${ACTUATOR_ENDPOINTS:health,info,metrics,prometheus,env,loggers,beans,conditions,configprops,flyway,liquibase}
+      base-path: /actuator
+      cors:
+        allowed-origins: ${ACTUATOR_CORS_ORIGINS:*}
+        allowed-methods: GET,POST
+  
+  endpoint:
+    # Health endpoint configuration
+    health:
+      show-details: ${ACTUATOR_HEALTH_DETAILS:when_authorized}
+      show-components: ${ACTUATOR_HEALTH_COMPONENTS:when_authorized}
+      cache:
+        time-to-live: ${ACTUATOR_HEALTH_CACHE_TTL:10s}
+      
+      # Custom health indicators
+      db:
+        enabled: true
+      redis:
+        enabled: true
+      diskspace:
+        enabled: true
+        threshold: ${HEALTH_DISKSPACE_THRESHOLD:10MB}
+    
+    # Metrics endpoint configuration
+    metrics:
+      enabled: true
+      cache:
+        time-to-live: ${ACTUATOR_METRICS_CACHE_TTL:5s}
+    
+    # Prometheus endpoint configuration
+    prometheus:
+      enabled: ${PROMETHEUS_ENABLED:true}
+      cache:
+        time-to-live: ${PROMETHEUS_CACHE_TTL:5s}
+    
+    # Info endpoint configuration
+    info:
+      enabled: true
+    
+    # Environment endpoint configuration
+    env:
+      enabled: ${ACTUATOR_ENV_ENABLED:false}
+      show-values: ${ACTUATOR_ENV_SHOW_VALUES:when_authorized}
+  
+  # Health indicators configuration
+  health:
+    # Database health indicator
+    db:
+      enabled: true
+    
+    # Redis health indicator
+    redis:
+      enabled: true
+    
+    # Disk space health indicator
+    diskspace:
+      enabled: true
+      threshold: ${HEALTH_DISKSPACE_THRESHOLD:10MB}
+    
+    # Custom business health indicators
+    audit-service:
+      enabled: true
+    
+    batch-jobs:
+      enabled: true
+  
+  # Metrics configuration for monitoring
+  metrics:
+    export:
+      # Prometheus metrics export
+      prometheus:
+        enabled: ${PROMETHEUS_METRICS_ENABLED:true}
+        step: ${PROMETHEUS_STEP:15s}
+        descriptions: true
+        
+    # Distribution metrics for percentiles
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        batch.job.duration: true
+        database.connection.usage: true
+      percentiles:
+        http.server.requests: 0.5, 0.75, 0.95, 0.99
+        batch.job.duration: 0.5, 0.95, 0.99
+      minimum-expected-value:
+        http.server.requests: 1ms
+      maximum-expected-value:
+        http.server.requests: 5s
+    
+    # Enable specific metrics
+    enable:
+      jvm: true
+      system: true
+      process: true
+      http: true
+      logback: true
+      jdbc: true
+      hikaricp: true
+      cache: true
+      spring.batch: true
+      spring.data.repository: true
+    
+    # JVM metrics configuration
+    jvm:
+      memory:
+        enabled: true
+      gc:
+        enabled: true
+      threads:
+        enabled: true
+    
+    # System metrics configuration
+    system:
+      cpu:
+        enabled: true
+      memory:
+        enabled: true
+      disk:
+        enabled: true
+    
+    # Web metrics configuration
+    web:
+      server:
+        request:
+          autotime:
+            enabled: true
+            percentiles: 0.5, 0.75, 0.95, 0.99
+  
+  # Tracing configuration (for future observability enhancement)
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:0.1}
+
+# ==============================================================================
+# SERVER CONFIGURATION
+# ==============================================================================
+# Embedded Tomcat server configuration for Spring Boot application
+# ==============================================================================
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: ${SERVER_CONTEXT_PATH:/api}
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+  
+  # Tomcat configuration for high-performance transaction processing
+  tomcat:
+    # Connection handling
+    max-connections: ${TOMCAT_MAX_CONNECTIONS:8192}
+    accept-count: ${TOMCAT_ACCEPT_COUNT:100}
+    max-threads: ${TOMCAT_MAX_THREADS:200}
+    min-spare-threads: ${TOMCAT_MIN_SPARE_THREADS:10}
+    
+    # Keep-alive configuration
+    keep-alive-timeout: ${TOMCAT_KEEP_ALIVE_TIMEOUT:60000}
+    max-keep-alive-requests: ${TOMCAT_MAX_KEEP_ALIVE_REQUESTS:100}
+    
+    # Request handling
+    connection-timeout: ${TOMCAT_CONNECTION_TIMEOUT:20000}
+    max-http-form-post-size: ${TOMCAT_MAX_HTTP_FORM_POST_SIZE:2MB}
+    max-swallow-size: ${TOMCAT_MAX_SWALLOW_SIZE:2MB}
+    
+    # Compression
+    compression: on
+    compress-mime-types: application/json,application/xml,text/html,text/xml,text/plain,text/css,application/javascript
+    compression-min-response-size: 1024
+    
+    # Access logging
+    accesslog:
+      enabled: ${TOMCAT_ACCESS_LOG_ENABLED:false}
+      directory: ${TOMCAT_ACCESS_LOG_DIR:logs}
+      prefix: access_log
+      suffix: .log
+      pattern: '%h %l %u %t "%r" %s %b %D'
+  
+  # Error handling configuration
+  error:
+    include-exception: ${SERVER_ERROR_INCLUDE_EXCEPTION:false}
+    include-stacktrace: ${SERVER_ERROR_INCLUDE_STACKTRACE:never}
+    include-message: ${SERVER_ERROR_INCLUDE_MESSAGE:never}
+    include-binding-errors: ${SERVER_ERROR_INCLUDE_BINDING_ERRORS:never}
+
+# ==============================================================================
+# LOGGING CONFIGURATION
+# ==============================================================================
+# Logback configuration for structured JSON logging and monitoring
+# ==============================================================================
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    
+    # Application packages
+    com.carddemo: ${LOG_LEVEL_APP:INFO}
+    
+    # Framework packages
+    org.springframework: ${LOG_LEVEL_SPRING:WARN}
+    org.springframework.security: ${LOG_LEVEL_SECURITY:WARN}
+    org.springframework.batch: ${LOG_LEVEL_BATCH:INFO}
+    org.springframework.data: ${LOG_LEVEL_DATA:WARN}
+    org.springframework.web: ${LOG_LEVEL_WEB:WARN}
+    
+    # Database packages
+    org.hibernate: ${LOG_LEVEL_HIBERNATE:WARN}
+    org.hibernate.SQL: ${LOG_LEVEL_HIBERNATE_SQL:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: ${LOG_LEVEL_HIBERNATE_PARAMS:WARN}
+    
+    # Connection pool
+    com.zaxxer.hikari: ${LOG_LEVEL_HIKARI:WARN}
+    
+    # Redis
+    org.springframework.data.redis: ${LOG_LEVEL_REDIS:WARN}
+    
+    # Flyway
+    org.flywaydb: ${LOG_LEVEL_FLYWAY:INFO}
+    
+    # Actuator
+    org.springframework.boot.actuate: ${LOG_LEVEL_ACTUATOR:WARN}
+  
+  # Log file configuration
+  file:
+    path: ${LOG_FILE_PATH:logs}
+    name: ${LOG_FILE_NAME:carddemo.log}
+    max-size: ${LOG_FILE_MAX_SIZE:100MB}
+    max-history: ${LOG_FILE_MAX_HISTORY:30}
+    total-size-cap: ${LOG_FILE_TOTAL_SIZE_CAP:3GB}
+  
+  # Pattern configuration
+  pattern:
+    console: ${LOG_PATTERN_CONSOLE:%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%5p) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx}
+    file: ${LOG_PATTERN_FILE:%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } --- [%t] %-40.40logger{39} : %m%n%wEx}
+
+# ==============================================================================
+# APPLICATION-SPECIFIC CONFIGURATION
+# ==============================================================================
+# Custom application configuration for CardDemo business logic
+# ==============================================================================
+app:
+  # Application metadata
+  name: ${APP_NAME:CardDemo Application}
+  description: ${APP_DESCRIPTION:Credit Card Management System}
+  version: ${APP_VERSION:@project.version@}
+  
+  # Security configuration
+  security:
+    # JWT configuration
+    jwt:
+      secret: ${JWT_SECRET:carddemo-jwt-secret-key-change-in-production}
+      expiration-hours: ${JWT_EXPIRATION_HOURS:8}
+      issuer: ${JWT_ISSUER:carddemo-application}
+      
+    # Password configuration
+    password:
+      bcrypt-strength: ${PASSWORD_BCRYPT_STRENGTH:10}
+      
+    # CORS configuration
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
+      allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+      allowed-headers: ${CORS_ALLOWED_HEADERS:*}
+      allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
+      max-age: ${CORS_MAX_AGE:3600}
+  
+  # Business configuration
+  business:
+    # Transaction limits
+    transaction:
+      max-amount: ${TRANSACTION_MAX_AMOUNT:10000.00}
+      daily-limit: ${TRANSACTION_DAILY_LIMIT:50000.00}
+      
+    # Account configuration
+    account:
+      interest-rate: ${ACCOUNT_INTEREST_RATE:0.0125}
+      min-balance: ${ACCOUNT_MIN_BALANCE:0.00}
+      
+    # Card configuration
+    card:
+      expiry-years: ${CARD_EXPIRY_YEARS:3}
+      cvv-length: ${CARD_CVV_LENGTH:3}
+  
+  # Audit configuration
+  audit:
+    enabled: ${AUDIT_ENABLED:true}
+    retention-days: ${AUDIT_RETENTION_DAYS:2557} # 7 years
+    async-processing: ${AUDIT_ASYNC_PROCESSING:true}
+    
+  # File processing configuration
+  file:
+    processing:
+      temp-directory: ${FILE_PROCESSING_TEMP_DIR:${java.io.tmpdir}/carddemo}
+      max-file-size: ${FILE_PROCESSING_MAX_SIZE:10MB}
+      allowed-types: ${FILE_PROCESSING_ALLOWED_TYPES:txt,csv,pdf}
+      
+  # Cache configuration
+  cache:
+    ttl:
+      reference-data: ${CACHE_TTL_REFERENCE_DATA:3600} # 1 hour
+      user-session: ${CACHE_TTL_USER_SESSION:1800} # 30 minutes
+      lookup-data: ${CACHE_TTL_LOOKUP_DATA:7200} # 2 hours
+
+# ==============================================================================
+# ENVIRONMENT-SPECIFIC CONFIGURATIONS
+# ==============================================================================
+# Profile-specific configurations for different deployment environments
+# ==============================================================================
+
+---
+# Development Environment Configuration
+spring:
+  config:
+    activate:
+      on-profile: development
+  
+  # Development-specific datasource
+  datasource:
+    url: jdbc:postgresql://localhost:5432/carddemo_dev
+    username: carddemo_dev
+    password: dev_password
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
+  
+  # Development Redis configuration
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: ""
+  
+  # Development JPA configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        show_sql: true
+        generate_statistics: true
+
+# Development logging
+logging:
+  level:
+    root: DEBUG
+    com.carddemo: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.batch: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+# Development server configuration
+server:
+  port: 8080
+
+---
+# Staging Environment Configuration
+spring:
+  config:
+    activate:
+      on-profile: staging
+  
+  # Staging-specific datasource
+  datasource:
+    url: jdbc:postgresql://${STAGING_DB_HOST:staging-db}:5432/${STAGING_DB_NAME:carddemo_staging}
+    username: ${STAGING_DB_USERNAME:carddemo_staging}
+    password: ${STAGING_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 15
+      minimum-idle: 5
+  
+  # Staging Redis configuration
+  data:
+    redis:
+      host: ${STAGING_REDIS_HOST:staging-redis}
+      port: ${STAGING_REDIS_PORT:6379}
+      password: ${STAGING_REDIS_PASSWORD}
+  
+  # Staging JPA configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+        show_sql: false
+
+# Staging logging
+logging:
+  level:
+    root: INFO
+    com.carddemo: INFO
+    org.springframework.security: WARN
+
+# Staging server configuration
+server:
+  port: 8080
+
+---
+# Production Environment Configuration
+spring:
+  config:
+    activate:
+      on-profile: production
+  
+  # Production-specific datasource
+  datasource:
+    url: jdbc:postgresql://${PROD_DB_HOST}:${PROD_DB_PORT:5432}/${PROD_DB_NAME}
+    username: ${PROD_DB_USERNAME}
+    password: ${PROD_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      leak-detection-threshold: 60000
+  
+  # Production Redis configuration
+  data:
+    redis:
+      host: ${PROD_REDIS_HOST}
+      port: ${PROD_REDIS_PORT:6379}
+      password: ${PROD_REDIS_PASSWORD}
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 4
+  
+  # Production JPA configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+        show_sql: false
+        generate_statistics: false
+
+# Production logging
+logging:
+  level:
+    root: WARN
+    com.carddemo: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+
+# Production server configuration
+server:
+  port: 8080
+  tomcat:
+    max-connections: 8192
+    max-threads: 200
+
+# Production session configuration
+spring:
+  session:
+    cookie:
+      secure: true
+      same-site: strict
+
+# Production actuator configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+---
+# Testing Environment Configuration
+spring:
+  config:
+    activate:
+      on-profile: test
+  
+  # Test database configuration (H2 in-memory)
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+  
+  # Test JPA configuration
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    properties:
+      hibernate:
+        format_sql: true
+        show_sql: false
+  
+  # Test Redis configuration (embedded)
+  data:
+    redis:
+      host: localhost
+      port: 0
+  
+  # Test batch configuration
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: always
+
+# Test logging
+logging:
+  level:
+    root: WARN
+    com.carddemo: DEBUG
+    org.springframework.test: DEBUG
+
+# Test server configuration
+server:
+  port: 0 # Random port for testing
