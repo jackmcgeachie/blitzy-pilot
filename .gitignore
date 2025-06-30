@@ -1,0 +1,403 @@
+# =============================================================================
+# .gitignore for Credit Card Management System Migration Project
+# Java Spring Boot application with React frontend, Docker/Kubernetes deployment
+# =============================================================================
+
+# =============================================================================
+# JAVA BUILD ARTIFACTS
+# =============================================================================
+
+# Maven build artifacts
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Gradle build artifacts (alternative build system)
+.gradle/
+build/
+gradle-app.setting
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Compiled class files
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# =============================================================================
+# SPRING BOOT SPECIFIC
+# =============================================================================
+
+# Spring Boot application logs
+logs/
+*.log
+*.log.*
+application-*.log
+spring.log
+spring-*.log
+
+# Spring Boot DevTools restart marker
+.reloadtrigger
+
+# Spring Boot configuration overrides
+application-local.yml
+application-local.yaml
+application-local.properties
+application-dev-override.yml
+application-dev-override.yaml
+application-dev-override.properties
+
+# Spring Boot Actuator sensitive endpoints data
+actuator/
+management/
+
+# H2 database files (if used for testing)
+*.db
+*.mv.db
+*.trace.db
+
+# =============================================================================
+# DATABASE AND PERSISTENCE
+# =============================================================================
+
+# Local database files
+db/
+database/
+*.sqlite
+*.sqlite3
+data/
+
+# PostgreSQL local dumps
+*.sql
+*.dump
+pg_data/
+postgres-data/
+
+# Redis local data
+redis-data/
+dump.rdb
+
+# JPA/Hibernate generated DDL
+create.sql
+drop.sql
+schema.sql
+
+# =============================================================================
+# IDE CONFIGURATION FILES
+# =============================================================================
+
+# IntelliJ IDEA Ultimate 2023.3+
+.idea/
+*.iws
+*.iml
+*.ipr
+.idea_modules/
+atlassian-ide-plugin.xml
+
+# Visual Studio Code 1.85+
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Eclipse IDE
+.metadata
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+.recommenders
+.project
+.externalToolBuilders/
+*.launch
+.pydevproject
+.cproject
+.classpath
+.factorypath
+.buildpath
+.target
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# =============================================================================
+# REACT FRONTEND AND NODE.JS
+# =============================================================================
+
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# React build artifacts
+/src/main/webapp/build/
+/frontend/build/
+/ui/build/
+/client/build/
+
+# React environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Parcel cache
+.cache/
+.parcel-cache/
+
+# Webpack build cache
+.webpack/
+
+# ESLint cache
+.eslintcache
+
+# Stylelint cache
+.stylelintcache
+
+# =============================================================================
+# DOCKER AND CONTAINERIZATION
+# =============================================================================
+
+# Docker build context
+.dockerignore
+Dockerfile.local
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Docker volumes and data
+docker-data/
+volumes/
+
+# Container logs
+containers/
+
+# Docker Compose environment files
+.env.docker
+.env.compose
+
+# =============================================================================
+# KUBERNETES AND HELM
+# =============================================================================
+
+# Kubernetes local configuration
+kubeconfig
+kubeconfig.*
+k8s-local/
+kubernetes-local/
+
+# Helm chart dependencies
+charts/*/charts/
+charts/*/requirements.lock
+
+# Helm local values
+values-local.yaml
+values-dev-local.yaml
+values-override.yaml
+
+# Kubernetes secrets (local development)
+secrets-local/
+local-secrets/
+
+# =============================================================================
+# TESTING AND COVERAGE
+# =============================================================================
+
+# JUnit test results
+TEST-*.xml
+
+# JaCoCo coverage reports
+jacoco.exec
+jacoco-ut.exec
+jacoco-it.exec
+
+# Surefire test reports
+surefire-reports/
+
+# Failsafe test reports
+failsafe-reports/
+
+# TestContainers
+.testcontainers/
+
+# Coverage tools
+coverage/
+*.lcov
+
+# =============================================================================
+# DEVELOPMENT ENVIRONMENT
+# =============================================================================
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.#*
+
+# Editor backup files
+*~
+*.orig
+*.rej
+
+# =============================================================================
+# SECURITY AND CREDENTIALS
+# =============================================================================
+
+# Credential files
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+*.keystore
+*.truststore
+
+# Environment-specific secrets
+secrets/
+credentials/
+.secrets/
+.credentials/
+
+# Application secrets
+application-secrets.yml
+application-secrets.yaml
+application-secrets.properties
+
+# JWT keys
+jwt-*.key
+private-key.pem
+public-key.pem
+
+# =============================================================================
+# MONITORING AND LOGGING
+# =============================================================================
+
+# Application logs
+*.log
+logs/
+log/
+
+# Monitoring data
+monitoring/
+metrics/
+traces/
+
+# Profiling data
+*.hprof
+*.prof
+
+# =============================================================================
+# BUILD AND CI/CD
+# =============================================================================
+
+# CI/CD artifacts
+.ci/
+.github/workflows/local.yml
+.bitbucket/local.yml
+
+# Build artifacts
+dist/
+out/
+target/
+build/
+
+# Version files
+version.txt
+VERSION
+RELEASE
+
+# Code quality reports
+sonar/
+.sonar/
+sonarqube/
+
+# =============================================================================
+# MIGRATION SPECIFIC
+# =============================================================================
+
+# COBOL migration artifacts
+cobol-analysis/
+migration-logs/
+comparison-reports/
+
+# Legacy system interfaces
+legacy-interfaces/
+mainframe-data/
+
+# Parallel testing data
+parallel-test-results/
+regression-test-data/
+
+# Performance benchmark data
+benchmarks/
+performance-data/
+
+# =============================================================================
+# MISCELLANEOUS
+# =============================================================================
+
+# Package managers
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Runtime configuration
+runtime/
+config-local/
+
+# Cache directories
+.cache/
+cache/
+tmp/
+
+# Generated documentation
+docs/generated/
+javadoc/
+api-docs/
+
+# Backup files
+*.backup
+*.bak
+backup/
+
+# Local development overrides
+local/
+dev-local/
+override/
