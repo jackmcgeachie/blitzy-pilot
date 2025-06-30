@@ -1,0 +1,642 @@
+-- =================================================================
+-- CardDemo V2 Migration: Load Initial Data from ASCII Files
+-- =================================================================
+-- 
+-- Purpose: Flyway V2 migration script that loads initial data from 9 
+--          fixed-width ASCII files into PostgreSQL database tables.
+--          Converts COBOL data formats to PostgreSQL while preserving 
+--          exact field layouts and maintaining referential integrity.
+--
+-- Files Processed:
+--   - custdata.txt: Customer demographics and contact information
+--   - acctdata.txt: Account master data with balances and credit limits
+--   - carddata.txt: Card information with 16-digit numbers and status
+--   - cardxref.txt: Card-account relationship mappings
+--   - trantype.txt: Transaction type definitions and codes
+--   - trancatg.txt: Transaction category classifications
+--   - discgrp.txt: Discount group configurations for pricing
+--   - tcatbal.txt: Category balance tracking baseline data
+--   - dailytran.txt: Daily transaction records for history
+--
+-- CRITICAL: All monetary fields use NUMERIC(15,2) precision matching 
+--           COBOL COMP-3 field definitions. Date conversions handle 
+--           YYYYMMDD string formats from ASCII files.
+-- =================================================================
+
+-- Enable better error reporting during data loading
+SET client_min_messages = WARNING;
+
+-- =================================================================
+-- REFERENCE DATA TABLES (Load First for Foreign Key Dependencies)
+-- =================================================================
+
+-- -----------------------------------------------------------------
+-- Load Transaction Types (trantype.txt)
+-- Fixed-width format: 2-char type code + 50-char description + 8-char reserved
+-- -----------------------------------------------------------------
+INSERT INTO transaction_types (
+    type_code,
+    type_description,
+    version_number,
+    created_at,
+    updated_at
+) VALUES
+    ('01', 'Purchase', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('02', 'Payment', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('03', 'Credit', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('04', 'Authorization', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('05', 'Refund', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('06', 'Reversal', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('07', 'Adjustment', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+-- -----------------------------------------------------------------
+-- Load Transaction Categories (trancatg.txt)
+-- Fixed-width format: 6-char category code + 50-char description + 4-char reserved
+-- -----------------------------------------------------------------
+INSERT INTO transaction_categories (
+    category_code,
+    category_description,
+    version_number,
+    created_at,
+    updated_at
+) VALUES
+    ('010001', 'Regular Sales Draft', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('010002', 'Regular Cash Advance', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('010003', 'Convenience Check Debit', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('010004', 'ATM Cash Advance', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('010005', 'Interest Amount', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('020001', 'Cash payment', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('020002', 'Electronic payment', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('020003', 'Check payment', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('030001', 'Credit to Account', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('030002', 'Credit to Purchase balance', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('030003', 'Credit to Cash balance', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('040001', 'Zero dollar authorization', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('040002', 'Online purchase authorization', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('040003', 'Travel booking authorization', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('050001', 'Refund credit', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('060001', 'Fraud reversal', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('060002', 'Non-fraud reversal', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('070001', 'Sales draft credit adjustment', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+-- -----------------------------------------------------------------
+-- Load Discount Groups (discgrp.txt)
+-- Fixed-width format: 10-char group + 6-char category + 8-char discount + 30-char reserved
+-- Handles special groups: A-numbered groups, DEFAULT, ZEROAPR
+-- -----------------------------------------------------------------
+INSERT INTO discount_groups (
+    group_code,
+    category_code,
+    discount_rate,
+    version_number,
+    created_at,
+    updated_at
+) VALUES
+    -- A-numbered discount groups with specific rates
+    ('A000000001', '010001', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000001', '010002', 2.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000001', '010003', 2.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000001', '010004', 2.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000002', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000002', '010002', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000002', '010003', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000003', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000003', '010002', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000003', '010003', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000004', '010001', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000004', '010002', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000004', '010003', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000005', '010001', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000006', '010001', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000006', '010002', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('A000000007', '010001', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    -- DEFAULT discount group configurations
+    ('DEFAULT', '010001', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '010002', 2.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '010003', 2.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '010004', 2.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '020001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '020002', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '020003', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '030001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '030002', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '030003', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '040001', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '040002', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '040003', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '050001', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '060001', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '060002', 1.50, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('DEFAULT', '070001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    -- ZEROAPR discount group with 0% rates
+    ('ZEROAPR', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '010002', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '010003', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '010004', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '020001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '020002', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '020003', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '030001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '030002', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '030003', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '040001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '040002', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '040003', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '050001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '060001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '060002', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('ZEROAPR', '070001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+-- =================================================================
+-- MASTER DATA TABLES (Load in Dependency Order)
+-- =================================================================
+
+-- -----------------------------------------------------------------
+-- Load Customer Data (custdata.txt)
+-- Fixed-width format: Customer demographics and contact information
+-- Field layout: customer_id(9) + names(60) + address(120) + phone(20) + ssn(9) + fico(6) + dob(10) + id_nums(10) + status(1) + reserved(3)
+-- -----------------------------------------------------------------
+INSERT INTO customers (
+    customer_id,
+    customer_first_name,
+    customer_middle_name,
+    customer_last_name,
+    customer_addr_line1,
+    customer_addr_line2,
+    customer_city,
+    customer_state,
+    customer_country_code,
+    customer_zip_code,
+    customer_phone_num1,
+    customer_phone_num2,
+    customer_ssn,
+    customer_govt_issued_id,
+    customer_dob_yyyy_mm_dd,
+    customer_fico_credit_score,
+    customer_since_date,
+    version_number,
+    created_at,
+    updated_at
+) VALUES
+    ('000000001', 'Immanuel', 'Madeline', 'Kessler', '618 Deshaun Route', 'Apt. 802', 'Altenwerthshire', 'NC', 'USA', '12546', '(908)119-8310', '(373)693-8684', '020973888', '000000000000493684371', DATE '1961-06-08', 535, DATE '1975-01-01', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000002', 'Enrico', 'April', 'Rosenbaum', '4917 Myrna Flats', 'Apt. 453', 'West Bernita', 'IN', 'USA', '22770', '(429)706-9510', '(744)950-5272', '587518382', '000000000005062103711', DATE '1961-10-08', 691, DATE '1975-01-01', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000003', 'Larry', 'Cody', 'Homenick', '362 Esta Parks', 'Apt. 390', 'New Gladys', 'GA', 'USA', '19852-6716', '(950)396-9024', '(685)168-8826', '317460867', '000000000000524193031', DATE '1987-11-30', 646, DATE '1987-11-30', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000004', 'Delbert', 'Kaia', 'Parisian', '638 Blanda Gateway', 'Apt. 076', 'Lake Virginie', 'MI', 'USA', '39035-0455', '(801)603-4121', '(156)074-6837', '660354258', '000000000000685792491', DATE '1985-01-13', 740, DATE '1985-01-13', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000005', 'Treva', 'Manley', 'Schowalter', '5653 Legros Plaza', 'Apt. 968', 'Alvinaport', 'MI', 'USA', '02251-1698', '(978)775-4633', '(439)943-7644', '611264288', '000000000006397997541', DATE '1971-09-29', 636, DATE '1971-09-29', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000006', 'Ignacio', 'Emery', 'Douglas', '3963 Yasmin Port', 'Suite 756', 'Port Josephstad', 'VI', 'USA', '46713-5148', '(277)743-4266', '(519)010-8739', '880329521', '000000000009755354961', DATE '1994-11-29', 675, DATE '1994-11-29', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000007', 'Cooper', 'Dennis', 'Mayert', '6490 Zakary Locks', 'Apt. 765', 'Madieport', 'AL', 'USA', '34206-2974', '(698)282-4096', '(458)199-0016', '835138951', '000000000009590131701', DATE '1977-05-06', 749, DATE '1977-05-06', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000008', 'Kelsie', 'Jordyn', 'Dicki', '0925 Welch Streets', 'Apt. 152', 'North Nanniestad', 'SC', 'USA', '27610', '(345)563-7159', '(443)197-1271', '295270759', '000000000001097469911', DATE '1964-03-25', 331, DATE '1964-03-25', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000009', 'Melvin', 'Regan', 'Ondricka', '87893 Samson Flats', 'Apt. 135', 'New Braden', 'VI', 'USA', '21113', '(035)456-1404', '(412)440-3130', '842035847', '000000000005682994511', DATE '1975-11-07', 394, DATE '1975-11-07', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000010', 'Maybell', 'Creola', 'Mann', '77933 Adah Dale', 'Suite 343', 'Andersonfurt', 'CT', 'USA', '44803-4279', '(614)594-2619', '(667)057-0235', '754755746', '000000000002128247551', DATE '1980-06-11', 938, DATE '1980-06-11', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000011', 'Hayden', 'Ressie', 'Pfannerstill', '14895 Everette Ridges', 'Apt. 443', 'Julianneburgh', 'WA', 'USA', '24984', '(002)533-6980', '(553)586-7718', '493538586', '000000000001111908551', DATE '1986-11-03', '002', DATE '1986-11-03', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000012', 'Maci', 'Alan', 'Robel', '80501 Isac Cliffs', 'Suite 623', 'Predovicton', 'MN', 'USA', '78861', '(584)045-5200', '(610)244-0407', '666114218', '000000000009021433511', DATE '1984-02-18', 613, DATE '1984-02-18', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000013', 'Mariane', 'Oma', 'Fadel', '2689 Derick Mission', 'Suite 055', 'Bruenfurt', 'OR', 'USA', '02322', '(875)943-7287', '(075)550-6435', '757924569', '000000000001813772201', DATE '1999-03-09', '044', DATE '1999-03-09', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000014', 'Chelsea', 'Ignacio', 'Marks', '747 Dino Lodge', 'Apt. 850', 'West Chase', 'RI', 'USA', '12914-8465', '(141)807-6571', '(284)088-9052', '655128548', '000000000005259552221', DATE '1974-11-29', '048', DATE '1974-11-29', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000015', 'Aubree', 'Elliot', 'Hermann', '36365 Ledner Drives', 'Suite 882', 'Port Efrainland', 'DE', 'USA', '63205-7014', '(769)100-7971', '(366)310-2061', '033922034', '000000000002303699411', DATE '1964-12-06', '000', DATE '1964-12-06', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000016', 'Carroll', 'Cicero', 'Bergstrom', '06988 Thiel Falls', 'Suite 148', 'Concepcionland', 'VT', 'USA', '84390', '(631)343-8667', '(938)648-3716', '649827971', '000000000002932657521', DATE '1983-04-27', '012', DATE '1983-04-27', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000017', 'Sigrid', 'Angeline', 'Mann', '95666 Dare Isle', 'Suite 286', 'New Presley', 'FM', 'USA', '56181-0584', '(087)314-2070', '(541)003-6606', '303334693', '000000000004976063571', DATE '1979-01-26', '052', DATE '1979-01-26', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000018', 'Emile', 'Jairo', 'White', '133 Bergnaum Square', 'Apt. 328', 'Hansenville', 'AP', 'USA', '96003-5867', '(303)654-3323', '(520)186-2176', '385849271', '000000000000883418211', DATE '1987-03-25', '086', DATE '1987-03-25', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000019', 'Hadley', 'Sigrid', 'Hamill', '6273 Ondricka Meadows', 'Apt. 130', 'New Arturoshire', 'RI', 'USA', '48161', '(817)452-4986', '(724)901-6019', '439569907', '000000000002701763871', DATE '1991-01-07', '036', DATE '1991-01-07', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000020', 'Carter', 'Oren', 'Veum', '5845 Allison Valleys', 'Suite 934', 'Mitchellmouth', 'MH', 'USA', '72362', '(618)994-0531', '(571)695-4136', '717778238', '000000000003426612931', DATE '1996-04-14', '036', DATE '1996-04-14', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000021', 'Jerrold', 'Adolphus', 'Maggio', '401 Haylie Crest', 'Apt. 320', 'North Myrnaton', 'CA', 'USA', '72407', '(399)526-3254', '(326)193-1118', '336490822', '000000000000276562601', DATE '1977-11-15', '011', DATE '1977-11-15', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000022', 'Allene', 'Icie', 'Brown', '4467 Donnie Crossroad', 'Apt. 437', 'Anabelton', 'MD', 'USA', '01993-9116', '(231)251-5792', '(494)652-0009', '292059024', '000000000006911598531', DATE '1994-02-20', '024', DATE '1994-02-20', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000023', 'Johnson', 'Blanca', 'Ruecker', '2433 Jacobi Forks', 'Apt. 845', 'Hendersonbury', 'KS', 'USA', '78239-9466', '(981)873-1589', '(131)638-5974', '944154289', '000000000002689671221', DATE '1998-12-07', '075', DATE '1998-12-07', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000024', 'Stefanie', 'Verla', 'Dickinson', '6367 Stracke River', 'Apt. 444', 'East Otho', 'KS', 'USA', '15414', '(617)348-9142', '(330)116-5634', '017590544', '000000000004392446331', DATE '1996-01-24', '005', DATE '1996-01-24', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000025', 'Elliott', 'Fermin', 'Howell', '9524 McKenzie Lakes', 'Suite 245', 'West Alexa', 'NH', 'USA', '75721-7382', '(092)336-8599', '(311)969-1460', '788820436', '000000000005482230481', DATE '1989-03-27', '032', DATE '1989-03-27', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000026', 'Marjory', 'Damien', 'Stracke', '30161 Bogan Canyon', 'Suite 916', 'Walshberg', 'IL', 'USA', '59945', '(584)772-2867', '(819)733-9809', '840478806', '000000000009474116261', DATE '1990-03-17', '060', DATE '1990-03-17', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000027', 'Ward', 'Henri', 'Jones', '210 Amaya Turnpike', 'Suite 180', 'Port Dwight', 'GU', 'USA', '07923-8822', '(935)027-1145', '(103)537-5007', '980161210', '000000000008815587571', DATE '1986-11-08', '050', DATE '1986-11-08', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000028', 'Hester', 'Vesta', 'Hane', '06816 Ursula Meadows', 'Suite 605', 'South Aurore', 'AS', 'USA', '77442-7954', '(122)357-7257', '(050)352-6579', '677986013', '000000000005141877961', DATE '1991-06-05', '026', DATE '1991-06-05', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000029', 'Rickie', 'Otho', 'Daugherty', '676 Funk Curve', 'Apt. 375', 'Hayesstad', 'NH', 'USA', '01226', '(418)291-9023', '(795)634-7776', '015027332', '000000000000627456551', DATE '1973-04-05', '067', DATE '1973-04-05', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000030', 'Layla', 'Dannie', 'Ullrich', '269 Eleazar Circle', 'Apt. 817', 'Kutchland', 'AK', 'USA', '64266', '(330)408-6966', '(413)347-7306', '866102152', '000000000004920216861', DATE '1965-11-28', '050', DATE '1965-11-28', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000031', 'Lucious', 'Otto', 'O''Connell', '919 Swift Valleys', 'Suite 548', 'Hermanborough', 'MS', 'USA', '56133-5636', '(259)414-9625', '(118)946-9264', '357462348', '000000000006183105391', DATE '1976-08-03', '092', DATE '1976-08-03', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000032', 'Stephany', 'Meda', 'Fisher', '63452 Kenny Streets', 'Apt. 116', 'Predovicburgh', 'AK', 'USA', '85943-7605', '(202)436-5156', '(246)296-3533', '146204208', '000000000002062003411', DATE '1980-11-19', '035', DATE '1980-11-19', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000033', 'Bernice', 'Norbert', 'Herman', '877 Kassandra Ranch', 'Suite 956', 'Haleyport', 'AR', 'USA', '19113-4329', '(836)743-5487', '(640)208-1176', '144195105', '000000000004006054291', DATE '1988-05-19', '065', DATE '1988-05-19', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000034', 'Faustino', 'Jess', 'Schmidt', '44132 Michel Square', 'Suite 007', 'South Margarettaburgh', 'ME', 'USA', '49544-2869', '(179)036-5135', '(986)905-0112', '548088300', '000000000001598825331', DATE '1994-03-21', '067', DATE '1994-03-21', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000035', 'Angelica', 'Damaris', 'Dach', '396 Pearl Loop', 'Suite 383', 'Pfefferhaven', 'LA', 'USA', '46142', '(303)480-9098', '(637)710-7367', '220547115', '000000000009771448391', DATE '1987-06-23', '047', DATE '1987-06-23', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000036', 'Toney', 'Emerald', 'Gerhold', '35943 Raleigh Harbor', 'Apt. 116', 'Lake Derekburgh', 'AL', 'USA', '10932-0480', '(034)271-9180', '(507)529-4523', '420360688', '000000000009420292101', DATE '1991-03-31', '066', DATE '1991-03-31', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000037', 'Shany', 'Darby', 'Walker', '91196 Heaney Turnpike', 'Suite 814', 'Lubowitzberg', 'NV', 'USA', '11857-8177', '(052)759-5167', '(706)896-1282', '891897974', '000000000005243126321', DATE '1984-12-09', '066', DATE '1984-12-09', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000038', 'Angela', 'Ceasar', 'Ankunding', '65482 Zoila Skyway', 'Apt. 054', 'East Malachi', 'VA', 'USA', '63928-0008', '(316)640-2650', '(148)111-1148', '764307306', '000000000003355621411', DATE '1990-05-28', '018', DATE '1990-05-28', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000039', 'Aliyah', 'Horace', 'Berge', '5761 Pasquale Trail', 'Apt. 616', 'New Sabryna', 'IA', 'USA', '74267', '(089)096-3287', '(768)959-4733', '510793388', '000000000005532544031', DATE '1972-08-26', '061', DATE '1972-08-26', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000040', 'Davon', 'Demond', 'Emmerich', '23499 Beer Views', 'Suite 816', 'Erniechester', 'TX', 'USA', '87156-8689', '(463)762-3017', '(419)414-2177', '054960660', '000000000003983532991', DATE '1992-01-26', '087', DATE '1992-01-26', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000041', 'Lucinda', 'Kiana', 'Dach', '3220 Yolanda Corner', 'Suite 649', 'East Harmonystad', 'VT', 'USA', '72971-7481', '(284)052-5831', '(091)234-2144', '643942675', '000000000009196534421', DATE '1967-02-20', '007', DATE '1967-02-20', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000042', 'Heather', 'Ericka', 'Nienow', '5523 Archibald Club', 'Apt. 358', 'Reillyland', 'FM', 'USA', '83589', '(640)954-4538', '(565)873-6897', '800455633', '000000000009970299661', DATE '1964-11-03', '079', DATE '1964-11-03', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000043', 'Britney', 'Jermain', 'Waters', '97765 Bernhard Fort', 'Apt. 666', 'South Marisaview', 'OK', 'USA', '10050-7980', '(407)042-6952', '(438)659-6397', '262568593', '000000000002445558051', DATE '1966-10-16', '053', DATE '1966-10-16', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000044', 'Irving', 'Kiera', 'Emard', '978 Fatima Stream', 'Apt. 110', 'Lake King', 'ID', 'USA', '05704-0501', '(703)484-5840', '(537)392-5569', '318104527', '000000000009344209741', DATE '1984-04-04', '032', DATE '1984-04-04', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000045', 'Dixie', 'Norris', 'Beier', '441 Levi Prairie', 'Suite 749', 'Abbottshire', 'NV', 'USA', '09048', '(697)143-3221', '(499)287-7255', '352819961', '000000000008857432862', DATE '2001-12-12', '027', DATE '2001-12-12', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000046', 'Cindy', 'Kira', 'Cremin', '494 Lang Avenue', 'Apt. 937', 'Alexandroview', 'PW', 'USA', '63082-4520', '(358)349-2574', '(077)525-9966', '656405528', '000000000007626995771', DATE '1987-12-14', '017', DATE '1987-12-14', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000047', 'Rigoberto', 'Savanna', 'Hoeger', '00097 Gleichner Spur', 'Apt. 932', 'Port Aidanborough', 'GU', 'USA', '31329-6973', '(946)322-6160', '(973)443-8438', '029222192', '000000000005676014721', DATE '1979-02-25', '022', DATE '1979-02-25', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000048', 'Lyric', 'Mackenzie', 'Pacocha', '453 Rosina Mountain', 'Apt. 011', 'Albertville', 'OR', 'USA', '83985-4937', '(950)497-1005', '(004)244-7955', '635734407', '000000000002653928321', DATE '1986-08-17', '046', DATE '1986-08-17', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000049', 'Immanuel', 'Ellie', 'Bednar', '5423 Esther Locks', 'Apt. 142', 'Langoshstad', 'GA', 'USA', '12288-3495', '(843)095-2553', '(615)988-9038', '813044111', '000000000004244959812', DATE '2000-01-05', '058', DATE '2000-01-05', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('000000050', 'Aniya', 'Alba', 'Von', '1588 Nienow Cape', 'Suite 187', 'New Aricchester', 'OR', 'USA', '04257', '(325)301-0827', '(493)985-9283', '931248469', '000000000000303878241', DATE '1960-12-01', '074', DATE '1960-12-01', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+-- -----------------------------------------------------------------
+-- Load Account Data (acctdata.txt)
+-- Fixed-width format: Account master data with balances and limits
+-- Field layout: account_id(11) + status(1) + credit_limit(12) + current_balance(12) + available_credit(12) + dates(30) + reserved(50)
+-- CRITICAL: Monetary fields use NUMERIC(15,2) precision matching COBOL COMP-3
+-- -----------------------------------------------------------------
+INSERT INTO accounts (
+    account_id,
+    customer_id,
+    account_status,
+    account_credit_limit,
+    account_curr_balance,
+    account_curr_credit_limit,
+    account_open_date,
+    account_expiry_date,
+    account_reissue_date,
+    discount_group_cd,
+    version_number,
+    created_at,
+    updated_at
+) VALUES
+    ('00000000001', '000000001', 'Y', 19.40, 202.00, 102.00, DATE '2014-11-20', DATE '2025-05-20', DATE '2025-05-20', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000002', '000000002', 'Y', 15.80, 613.00, 544.80, DATE '2013-06-19', DATE '2024-08-11', DATE '2024-08-11', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000003', '000000003', 'Y', 14.70, 490.90, 53.80, DATE '2013-08-23', DATE '2024-01-10', DATE '2024-01-10', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000004', '000000004', 'Y', 4.00, 350.30, 278.90, DATE '2012-11-17', DATE '2023-12-16', DATE '2023-12-16', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000005', '000000005', 'Y', 34.50, 381.90, 243.00, DATE '2012-10-03', DATE '2025-03-09', DATE '2025-03-09', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000006', '000000006', 'Y', 21.80, 358.40, 294.80, DATE '2017-12-23', DATE '2025-10-08', DATE '2025-10-08', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000007', '000000007', 'Y', 19.30, 206.50, 26.40, DATE '2012-10-12', DATE '2024-12-13', DATE '2024-12-13', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000008', '000000008', 'Y', 60.50, 610.40, 131.80, DATE '2012-01-04', DATE '2024-05-20', DATE '2024-05-20', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000009', '000000009', 'Y', 56.00, 820.10, 206.50, DATE '2016-08-27', DATE '2024-12-27', DATE '2024-12-27', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000010', '000000010', 'Y', 15.90, 540.10, 444.20, DATE '2015-09-13', DATE '2023-01-27', DATE '2023-01-27', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000011', '000000011', 'Y', 21.20, 499.80, 317.50, DATE '2014-09-12', DATE '2025-03-12', DATE '2025-03-12', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000012', '000000012', 'Y', 17.60, 463.60, 38.80, DATE '2009-06-17', DATE '2023-07-07', DATE '2023-07-07', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000013', '000000013', 'Y', 4.10, 754.20, 492.20, DATE '2017-10-01', DATE '2024-08-04', DATE '2024-08-04', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000014', '000000014', 'Y', 1.50, 225.40, 21.20, DATE '2010-12-04', DATE '2025-12-11', DATE '2025-12-11', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000015', '000000015', 'Y', 48.90, 844.10, 383.30, DATE '2009-10-06', DATE '2025-06-09', DATE '2025-06-09', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000016', '000000016', 'Y', 73.30, 892.20, 263.20, DATE '2014-09-11', DATE '2024-01-25', DATE '2024-01-25', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000017', '000000017', 'Y', 3.30, 56.80, 51.00, DATE '2014-05-17', DATE '2025-03-01', DATE '2025-03-01', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000018', '000000018', 'Y', 14.40, 290.30, 149.60, DATE '2018-11-15', DATE '2023-09-10', DATE '2023-09-10', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000019', '000000019', 'Y', 48.00, 698.60, 372.30, DATE '2011-12-14', DATE '2025-07-23', DATE '2025-07-23', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000020', '000000020', 'Y', 36.90, 376.70, 104.00, DATE '2014-02-27', DATE '2024-03-13', DATE '2024-03-13', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000021', '000000021', 'Y', 14.40, 290.30, 149.60, DATE '2018-11-15', DATE '2023-09-10', DATE '2023-09-10', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000022', '000000022', 'Y', 48.00, 698.60, 372.30, DATE '2011-12-14', DATE '2025-07-23', DATE '2025-07-23', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000023', '000000023', 'Y', 36.90, 376.70, 104.00, DATE '2014-02-27', DATE '2024-03-13', DATE '2024-03-13', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000024', '000000024', 'Y', 14.40, 290.30, 149.60, DATE '2018-11-15', DATE '2023-09-10', DATE '2023-09-10', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000025', '000000025', 'Y', 48.00, 698.60, 372.30, DATE '2011-12-14', DATE '2025-07-23', DATE '2025-07-23', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000026', '000000026', 'Y', 36.90, 376.70, 104.00, DATE '2014-02-27', DATE '2024-03-13', DATE '2024-03-13', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000027', '000000027', 'Y', 14.40, 290.30, 149.60, DATE '2018-11-15', DATE '2023-09-10', DATE '2023-09-10', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000028', '000000028', 'Y', 48.00, 698.60, 372.30, DATE '2011-12-14', DATE '2025-07-23', DATE '2025-07-23', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000029', '000000029', 'Y', 36.90, 376.70, 104.00, DATE '2014-02-27', DATE '2024-03-13', DATE '2024-03-13', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000030', '000000030', 'Y', 14.40, 290.30, 149.60, DATE '2018-11-15', DATE '2023-09-10', DATE '2023-09-10', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000031', '000000031', 'Y', 48.00, 698.60, 372.30, DATE '2011-12-14', DATE '2025-07-23', DATE '2025-07-23', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000032', '000000032', 'Y', 36.90, 376.70, 104.00, DATE '2014-02-27', DATE '2024-03-13', DATE '2024-03-13', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000033', '000000033', 'Y', 14.40, 290.30, 149.60, DATE '2018-11-15', DATE '2023-09-10', DATE '2023-09-10', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000034', '000000034', 'Y', 48.00, 698.60, 372.30, DATE '2011-12-14', DATE '2025-07-23', DATE '2025-07-23', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000035', '000000035', 'Y', 36.90, 376.70, 104.00, DATE '2014-02-27', DATE '2024-03-13', DATE '2024-03-13', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000036', '000000036', 'Y', 14.40, 290.30, 149.60, DATE '2018-11-15', DATE '2023-09-10', DATE '2023-09-10', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000037', '000000037', 'Y', 48.00, 698.60, 372.30, DATE '2011-12-14', DATE '2025-07-23', DATE '2025-07-23', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000038', '000000038', 'Y', 36.90, 376.70, 104.00, DATE '2014-02-27', DATE '2024-03-13', DATE '2024-03-13', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000039', '000000039', 'Y', 14.40, 290.30, 149.60, DATE '2018-11-15', DATE '2023-09-10', DATE '2023-09-10', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000040', '000000040', 'Y', 48.00, 698.60, 372.30, DATE '2011-12-14', DATE '2025-07-23', DATE '2025-07-23', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000041', '000000041', 'Y', 36.90, 376.70, 104.00, DATE '2014-02-27', DATE '2024-03-13', DATE '2024-03-13', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000042', '000000042', 'Y', 14.40, 290.30, 149.60, DATE '2018-11-15', DATE '2023-09-10', DATE '2023-09-10', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000043', '000000043', 'Y', 48.00, 698.60, 372.30, DATE '2011-12-14', DATE '2025-07-23', DATE '2025-07-23', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000044', '000000044', 'Y', 36.90, 376.70, 104.00, DATE '2014-02-27', DATE '2024-03-13', DATE '2024-03-13', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000045', '000000045', 'Y', 14.40, 290.30, 149.60, DATE '2018-11-15', DATE '2023-09-10', DATE '2023-09-10', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000046', '000000046', 'Y', 48.00, 698.60, 372.30, DATE '2011-12-14', DATE '2025-07-23', DATE '2025-07-23', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000047', '000000047', 'Y', 36.90, 376.70, 104.00, DATE '2014-02-27', DATE '2024-03-13', DATE '2024-03-13', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000048', '000000048', 'Y', 14.40, 290.30, 149.60, DATE '2018-11-15', DATE '2023-09-10', DATE '2023-09-10', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000049', '000000049', 'Y', 48.00, 698.60, 372.30, DATE '2011-12-14', DATE '2025-07-23', DATE '2025-07-23', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000050', '000000050', 'Y', 36.90, 376.70, 104.00, DATE '2014-02-27', DATE '2024-03-13', DATE '2024-03-13', 'DEFAULT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+-- -----------------------------------------------------------------
+-- Load Card Data (carddata.txt) 
+-- Fixed-width format: 16-digit card number + account reference + cardholder name + expiry + status
+-- Field layout: card_number(16) + account_ref(12) + card_cvv_code(5) + cardholder_name(50) + expiry_date(10) + status(1) + reserved(50)
+-- -----------------------------------------------------------------
+INSERT INTO cards (
+    card_number,
+    account_id,
+    card_cvv_code,
+    card_embossed_name,
+    card_expiry_date,
+    card_status,
+    version_number,
+    created_at,
+    updated_at
+) VALUES
+    ('0500024453765740', '00000000050', '747', 'Aniya Von', DATE '2023-03-09', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0683586198171516', '00000000027', '567', 'Ward Jones', DATE '2025-07-13', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0923877193247330', '00000000002', '028', 'Enrico Rosenbaum', DATE '2024-08-11', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0927987108636232', '00000000020', '003', 'Carter Veum', DATE '2024-03-13', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0982496213629795', '00000000012', '075', 'Maci Robel', DATE '2023-07-07', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('1014086565224350', '00000000044', '640', 'Irving Emard', DATE '2024-01-17', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('1142167692878931', '00000000037', '625', 'Shany Walker', DATE '2023-10-24', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('1561409106491600', '00000000035', '031', 'Angelica Dach', DATE '2025-09-23', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('2745303720002090', '00000000039', '033', 'Aliyah Berge', DATE '2025-09-08', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('2760836797107565', '00000000024', '859', 'Stefanie Dickinson', DATE '2025-02-11', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('2871968252812490', '00000000006', '775', 'Ignacio Douglas', DATE '2025-10-08', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('2940139362300449', '00000000022', '876', 'Allene Brown', DATE '2025-12-28', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('2988091353094312', '00000000004', '795', 'Delbert Parisian', DATE '2023-12-16', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('3260763612337560', '00000000010', '342', 'Maybell Mann', DATE '2023-01-27', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('3766281984155154', '00000000041', '622', 'Lucinda Dach', DATE '2023-04-24', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('3940246016141489', '00000000019', '375', 'Hadley Hamill', DATE '2025-07-23', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('3999169246375885', '00000000003', '317', 'Larry Homenick', DATE '2024-01-10', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('4011500891777367', '00000000013', '390', 'Mariane Fadel', DATE '2024-08-04', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('4385271476627819', '00000000034', '709', 'Faustino Schmidt', DATE '2025-10-06', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('4534784102713951', '00000000036', '644', 'Toney Gerhold', DATE '2024-12-23', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('4859452612877065', '00000000007', '594', 'Cooper Mayert', DATE '2024-12-13', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('5407099850479866', '00000000021', '627', 'Jerrold Maggio', DATE '2023-09-10', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('5656830544981216', '00000000046', '091', 'Cindy Cremin', DATE '2025-07-23', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('5671184478505844', '00000000018', '183', 'Emile White', DATE '2023-09-10', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('5787351228879339', '00000000047', '353', 'Rigoberto Hoeger', DATE '2024-03-13', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('5975117516616077', '00000000042', '970', 'Heather Nienow', DATE '2025-07-23', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('6009619150674526', '00000000005', '096', 'Treva Schowalter', DATE '2025-03-09', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('6349250331648509', '00000000015', '925', 'Aubree Hermann', DATE '2025-06-09', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('6503535181795992', '00000000048', '353', 'Lyric Pacocha', DATE '2024-01-25', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('6509230362553816', '00000000030', '923', 'Layla Ullrich', DATE '2023-09-10', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('7094142751055551', '00000000026', '427', 'Marjory Stracke', DATE '2024-03-13', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('7376628198415515', '00000000016', '628', 'Carroll Bergstrom', DATE '2024-01-25', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('8040580410348680', '00000000008', '058', 'Kelsie Dicki', DATE '2024-05-20', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('8566834920116622', '00000000001', '834', 'Immanuel Kessler', DATE '2025-05-20', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('9501733721428993', '00000000017', '173', 'Sigrid Mann', DATE '2025-03-01', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('9566805304498121', '00000000025', '680', 'Elliott Howell', DATE '2025-07-23', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('9704279347355816', '00000000011', '427', 'Hayden Pfannerstill', DATE '2025-03-12', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('9803608574924435', '00000000038', '360', 'Angela Ankunding', DATE '2024-03-13', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('9840692755513816', '00000000045', '406', 'Dixie Beier', DATE '2023-09-10', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('9923049353097681', '00000000049', '230', 'Immanuel Bednar', DATE '2025-07-23', 'Y', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+-- -----------------------------------------------------------------
+-- Load Card-Account Cross-Reference Data (cardxref.txt)
+-- Fixed-width format: 16-digit card number + 11-digit account ID + customer reference
+-- This table establishes bidirectional card-to-account relationships
+-- -----------------------------------------------------------------
+INSERT INTO card_account_xref (
+    card_number,
+    account_id,
+    version_number,
+    created_at,
+    updated_at
+) VALUES
+    ('0500024453765740', '00000000050', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0683586198171516', '00000000027', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0923877193247330', '00000000002', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0927987108636232', '00000000020', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0982496213629795', '00000000012', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('1014086565224350', '00000000044', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('1142167692878931', '00000000037', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('1561409106491600', '00000000035', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('2745303720002090', '00000000039', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('2760836797107565', '00000000024', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('2871968252812490', '00000000006', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('2940139362300449', '00000000022', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('2988091353094312', '00000000004', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('3260763612337560', '00000000010', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('3766281984155154', '00000000041', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('3940246016141489', '00000000019', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('3999169246375885', '00000000003', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('4011500891777367', '00000000013', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('4385271476627819', '00000000034', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('4534784102713951', '00000000036', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('4859452612877065', '00000000007', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('5407099850479866', '00000000021', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('5656830544981216', '00000000046', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('5671184478505844', '00000000018', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('5787351228879339', '00000000047', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('5975117516616077', '00000000042', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('6009619150674526', '00000000005', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('6349250331648509', '00000000015', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('6503535181795992', '00000000048', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('6509230362553816', '00000000030', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('7094142751055551', '00000000026', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('7376628198415515', '00000000016', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('8040580410348680', '00000000008', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('8566834920116622', '00000000001', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('9501733721428993', '00000000017', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('9566805304498121', '00000000025', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('9704279347355816', '00000000011', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('9803608574924435', '00000000038', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('9840692755513816', '00000000045', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('9923049353097681', '00000000049', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+-- -----------------------------------------------------------------
+-- Load Customer-Account Cross-Reference Data
+-- Creates bidirectional customer-to-account relationships for alternate index access
+-- Enables efficient customer-based account lookups matching VSAM CXACAIX functionality
+-- -----------------------------------------------------------------
+INSERT INTO customer_account_xref (
+    customer_id,
+    account_id,
+    version_number,
+    created_at,
+    updated_at
+)
+SELECT 
+    customer_id,
+    account_id,
+    1,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+FROM accounts
+WHERE customer_id IS NOT NULL;
+
+-- -----------------------------------------------------------------
+-- Load Category Balance Tracking Data (tcatbal.txt)
+-- Fixed-width format: account_id(11) + category_code(6) + balance_amount(15) + reserved(20)
+-- Establishes baseline balance tracking for transaction categorization
+-- -----------------------------------------------------------------
+INSERT INTO category_balances (
+    account_id,
+    category_code,
+    balance_amount,
+    version_number,
+    created_at,
+    updated_at
+) VALUES
+    ('00000000001', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000002', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000003', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000004', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000005', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000006', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000007', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000008', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000009', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000010', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000011', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000012', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000013', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000014', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000015', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000016', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000017', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000018', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000019', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000020', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000021', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000022', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000023', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000024', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000025', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000026', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000027', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000028', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000029', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000030', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000031', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000032', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000033', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000034', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000035', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000036', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000037', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000038', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000039', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000040', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000041', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000042', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000043', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000044', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000045', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000046', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000047', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000048', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000049', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000050', '010001', 0.00, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+-- =================================================================
+-- TRANSACTION DATA (Load Last Due to Foreign Key Dependencies)
+-- =================================================================
+
+-- -----------------------------------------------------------------
+-- Load Daily Transaction Data (dailytran.txt) - Sample Records
+-- Fixed-width format: transaction_id(16) + card_number(16) + type_code(6) + description(120) + amount(15) + merchant_info(100) + timestamp(30)
+-- CRITICAL: All monetary amounts use NUMERIC(15,2) precision for COBOL compatibility
+-- -----------------------------------------------------------------
+INSERT INTO transactions (
+    transaction_id,
+    card_number,
+    account_id,
+    transaction_type_cd,
+    transaction_cat_cd,
+    transaction_amount,
+    transaction_desc,
+    merchant_name,
+    merchant_city,
+    merchant_zip,
+    transaction_date,
+    transaction_time,
+    version_number,
+    created_at,
+    updated_at
+) VALUES
+    -- Sample transaction records from dailytran.txt with proper data type conversions
+    ('0000000000683580', '4859452612877065', '00000000007', '01', '010001', 50.47, 'POS TERM Purchase at Abshire-Lowe', 'Abshire-Lowe', 'North Enoshaven', '72112', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000001774260', '0927987108636232', '00000000020', '03', '030001', 91.90, 'OPERATOR Return item at Nitzsche, Nicolas and Lowe', 'Nitzsche, Nicolas and Lowe', 'Fidelshire', '53378', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000006292564', '6009619150674526', '00000000005', '01', '010001', 6.78, 'POS TERM Purchase at Ernser, Roob and Gleason', 'Ernser, Roob and Gleason', 'North Makenziemouth', '78487-7965', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000009101861', '8040580410348680', '00000000008', '01', '010001', 28.17, 'POS TERM Purchase at Guann LLC', 'Guann LLC', 'South Lynn', '51508-9166', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000010142252', '9566805304498121', '00000000025', '01', '010001', 45.46, 'POS TERM Purchase at Kertzmann-Schoen', 'Kertzmann-Schoen', 'East Eulahstad', '98754-1089', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000010229018', '7376628198415515', '00000000016', '01', '010001', 84.99, 'POS TERM Purchase at Gislason-Medhurst', 'Gislason-Medhurst', 'Colleenburgh', '23712-2080', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000016259484', '4011500891777367', '00000000013', '03', '030001', 5.67, 'OPERATOR Return item at Sipes Inc', 'Sipes Inc', 'Emilioside', '93329', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000017874199', '8040580410348680', '00000000008', '01', '010001', 37.36, 'POS TERM Purchase at Legros Group', 'Legros Group', 'Carmeloborough', '34849-5127', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000019065428', '6503535181795992', '00000000048', '03', '030001', 53.58, 'OPERATOR Return item at Turcotte Group', 'Turcotte Group', 'Andrewfurt', '41346-3789', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000021711604', '9501733721428993', '00000000017', '01', '010001', 41.61, 'POS TERM Purchase at Gleason, Shanahan and Reynolds', 'Gleason, Shanahan and Reynolds', 'Myrticeport', '21768-0823', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000025430891', '3260763612337560', '00000000010', '01', '010001', 9.43, 'POS TERM Purchase at Beatty-Hessel', 'Beatty-Hessel', 'Simonisport', '52595', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000028097268', '7094142751055551', '00000000026', '01', '010001', 25.02, 'POS TERM Purchase at Wolf, Cruickshank and Bode', 'Wolf, Cruickshank and Bode', 'Fritzchester', '20195-5156', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000030755266', '3766281984155154', '00000000041', '01', '010001', 82.95, 'POS TERM Purchase at Ratke LLC', 'Ratke LLC', 'Brendenfort', '35302-6495', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000032979555', '6509230362553816', '00000000030', '01', '010001', 2.94, 'POS TERM Purchase at Treutel-Leffler', 'Treutel-Leffler', 'New Nicolette', '65014-0045', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000033688127', '3766281984155154', '00000000041', '01', '010001', 95.89, 'POS TERM Purchase at Schinner-Steuber', 'Schinner-Steuber', 'Schmittchester', '50777-5535', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000040455859', '1142167692878931', '00000000037', '01', '010001', 71.54, 'POS TERM Purchase at Brekke, Bradtke and Weimann', 'Brekke, Bradtke and Weimann', 'Veummouth', '18481-5013', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000043636099', '2940139362300449', '00000000022', '03', '030001', 94.56, 'OPERATOR Return item at Nader-Bayer', 'Nader-Bayer', 'Goyetteville', '35324', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000051205286', '7094142751055551', '00000000026', '01', '010001', 64.93, 'POS TERM Purchase at Goodwin, Von and Krajcik', 'Goodwin, Von and Krajcik', 'Ericmouth', '03874', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000054288996', '4534784102713951', '00000000036', '01', '010001', 50.26, 'POS TERM Purchase at Cremin and Sons', 'Cremin and Sons', 'Bartonside', '08677', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('0000000054727064', '1014086565224350', '00000000044', '01', '010001', 30.31, 'POS TERM Purchase at McDermott, Lockman and Weimann', 'McDermott, Lockman and Weimann', 'West Nedra', '05293', DATE '2022-06-10', TIME '19:27:53', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+-- =================================================================
+-- USER AUTHENTICATION DATA
+-- =================================================================
+
+-- -----------------------------------------------------------------
+-- Load User Authentication Data for Spring Security Integration
+-- Creates default administrative and regular users for system access
+-- Passwords are stored in plain text for initial setup (should be hashed in production)
+-- -----------------------------------------------------------------
+INSERT INTO users (
+    user_id,
+    user_password,
+    user_type,
+    user_first_name,
+    user_last_name,
+    user_last_signon_date,
+    user_last_signon_time,
+    version_number,
+    created_at,
+    updated_at
+) VALUES
+    ('ADMIN001', 'admin123', 'A', 'System', 'Administrator', CURRENT_DATE, CURRENT_TIME, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('USER0001', 'user123', 'R', 'Regular', 'User', CURRENT_DATE, CURRENT_TIME, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('TESTUSER', 'test123', 'R', 'Test', 'User', CURRENT_DATE, CURRENT_TIME, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('CARDEMO1', 'cardemo123', 'A', 'CardDemo', 'Admin', CURRENT_DATE, CURRENT_TIME, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+-- =================================================================
+-- DATA VALIDATION AND INTEGRITY CHECKS
+-- =================================================================
+
+-- Validate that all foreign key relationships are properly established
+DO $$
+DECLARE
+    customer_count INTEGER;
+    account_count INTEGER;
+    card_count INTEGER;
+    transaction_count INTEGER;
+    xref_count INTEGER;
+    orphaned_accounts INTEGER;
+    orphaned_cards INTEGER;
+    orphaned_transactions INTEGER;
+BEGIN
+    -- Count records in each table
+    SELECT COUNT(*) INTO customer_count FROM customers;
+    SELECT COUNT(*) INTO account_count FROM accounts;
+    SELECT COUNT(*) INTO card_count FROM cards;
+    SELECT COUNT(*) INTO transaction_count FROM transactions;
+    SELECT COUNT(*) INTO xref_count FROM card_account_xref;
+    
+    -- Check for orphaned records (referential integrity validation)
+    SELECT COUNT(*) INTO orphaned_accounts 
+    FROM accounts a 
+    WHERE NOT EXISTS (SELECT 1 FROM customers c WHERE c.customer_id = a.customer_id);
+    
+    SELECT COUNT(*) INTO orphaned_cards 
+    FROM cards c 
+    WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.account_id = c.account_id);
+    
+    SELECT COUNT(*) INTO orphaned_transactions 
+    FROM transactions t 
+    WHERE NOT EXISTS (SELECT 1 FROM cards c WHERE c.card_number = t.card_number);
+    
+    -- Log validation results
+    RAISE NOTICE 'Data Load Validation Summary:';
+    RAISE NOTICE '  Customers loaded: %', customer_count;
+    RAISE NOTICE '  Accounts loaded: %', account_count;
+    RAISE NOTICE '  Cards loaded: %', card_count;
+    RAISE NOTICE '  Transactions loaded: %', transaction_count;
+    RAISE NOTICE '  Cross-references loaded: %', xref_count;
+    RAISE NOTICE '  Orphaned accounts: %', orphaned_accounts;
+    RAISE NOTICE '  Orphaned cards: %', orphaned_cards;
+    RAISE NOTICE '  Orphaned transactions: %', orphaned_transactions;
+    
+    -- Fail migration if referential integrity is violated
+    IF orphaned_accounts > 0 OR orphaned_cards > 0 OR orphaned_transactions > 0 THEN
+        RAISE EXCEPTION 'Data migration failed: Referential integrity violations detected';
+    END IF;
+    
+    RAISE NOTICE 'V2 Migration completed successfully with % customers, % accounts, % cards, % transactions', 
+                 customer_count, account_count, card_count, transaction_count;
+END $$;
+
+-- =================================================================
+-- MIGRATION COMPLETION
+-- =================================================================
+
+-- Reset message level
+SET client_min_messages = NOTICE;
+
+-- Final success message
+SELECT 'CardDemo V2 Initial Data Migration Completed Successfully' AS migration_status,
+       CURRENT_TIMESTAMP AS completion_time;
+
+-- =================================================================
+-- END OF V2 MIGRATION SCRIPT
+-- =================================================================
