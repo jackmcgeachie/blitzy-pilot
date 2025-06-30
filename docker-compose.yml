@@ -1,0 +1,324 @@
+version: '3.8'
+
+# CardDemo Application Local Development Stack
+# Orchestrates Spring Boot application, PostgreSQL database, and Redis session store
+# Supports comprehensive local testing and development workflow
+
+services:
+  # PostgreSQL 15+ Database Service - Primary data persistence
+  # Replaces VSAM KSDS file structures with relational database
+  postgres:
+    image: postgres:15.4-alpine
+    container_name: carddemo-postgres
+    environment:
+      # Database configuration for development environment
+      POSTGRES_DB: carddemo
+      POSTGRES_USER: carddemo_user
+      POSTGRES_PASSWORD: carddemo_dev_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      # Enable detailed logging for development
+      POSTGRES_LOG_STATEMENT: all
+      POSTGRES_LOG_MIN_DURATION_STATEMENT: 0
+    ports:
+      - "5432:5432"
+    volumes:
+      # Persistent volume for database data
+      - postgres_data:/var/lib/postgresql/data
+      # Initialize database schema and initial data
+      - ./src/main/resources/db/migration:/docker-entrypoint-initdb.d:ro
+      # Custom PostgreSQL configuration for development
+      - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    networks:
+      - carddemo-network
+    # Health check using PostgreSQL pg_isready utility
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U carddemo_user -d carddemo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # Resource limits for development environment
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    restart: unless-stopped
+
+  # Redis 7+ Session Management Service
+  # Replaces CICS COMMAREA pseudo-conversational state management
+  redis:
+    image: redis:7.2-alpine
+    container_name: carddemo-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      # Persistent volume for Redis AOF persistence
+      - redis_data:/data
+      # Custom Redis configuration for session management
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - carddemo-network
+    # Health check using Redis ping command
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    # Resource limits optimized for session storage
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    restart: unless-stopped
+
+  # Spring Boot CardDemo Application
+  # Converted from COBOL/CICS mainframe application to modern microservices
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+      # Build arguments for development profile
+      args:
+        SPRING_PROFILES_ACTIVE: dev
+        JAVA_OPTS: "-Xmx1024m -Xms512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseContainerSupport"
+    container_name: carddemo-app
+    environment:
+      # Spring Boot configuration for development
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carddemo
+      SPRING_DATASOURCE_USERNAME: carddemo_user
+      SPRING_DATASOURCE_PASSWORD: carddemo_dev_password
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      
+      # HikariCP connection pool configuration
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 20
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
+      SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT: 600000
+      SPRING_DATASOURCE_HIKARI_MAX_LIFETIME: 1800000
+      
+      # Redis session store configuration
+      SPRING_SESSION_STORE_TYPE: redis
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_DATABASE: 0
+      SPRING_REDIS_TIMEOUT: 2000ms
+      SPRING_REDIS_JEDIS_POOL_MAX_ACTIVE: 8
+      SPRING_REDIS_JEDIS_POOL_MAX_IDLE: 8
+      SPRING_REDIS_JEDIS_POOL_MIN_IDLE: 0
+      
+      # JPA/Hibernate configuration for development
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_JPA_SHOW_SQL: true
+      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: true
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_BATCH_SIZE: 20
+      SPRING_JPA_PROPERTIES_HIBERNATE_ORDER_INSERTS: true
+      SPRING_JPA_PROPERTIES_HIBERNATE_ORDER_UPDATES: true
+      
+      # Flyway database migration configuration
+      SPRING_FLYWAY_ENABLED: true
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: true
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: true
+      
+      # Actuator endpoints for monitoring and health checks
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics,prometheus
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
+      MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: true
+      MANAGEMENT_SERVER_PORT: 8081
+      
+      # Logging configuration for development
+      LOGGING_LEVEL_COM_CARDDEMO: DEBUG
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: DEBUG
+      LOGGING_LEVEL_ORG_HIBERNATE_SQL: DEBUG
+      LOGGING_PATTERN_CONSOLE: '{"timestamp":"%d","level":"%level","thread":"%thread","logger":"%logger","message":"%message","trace":"%mdc"}'
+      
+      # COBOL compatibility settings for numeric precision
+      CARDDEMO_NUMERIC_PRECISION_SCALE: 2
+      CARDDEMO_DATE_FORMAT: yyyyMMdd
+      CARDDEMO_DECIMAL_ROUNDING_MODE: HALF_UP
+      
+      # Development environment specific settings
+      CARDDEMO_DEV_MODE: true
+      CARDDEMO_AUDIT_ENABLED: true
+      CARDDEMO_PERFORMANCE_MONITORING: true
+    ports:
+      - "8080:8080"  # Main application port
+      - "8081:8081"  # Actuator/monitoring port
+    volumes:
+      # Configuration overlays for development environment
+      - ./src/main/resources/application-dev.yml:/app/config/application-dev.yml:ro
+      - ./docker/app/logback-spring.xml:/app/config/logback-spring.xml:ro
+      # Volume mount for file processing (VSAM replacement)
+      - ./app/data:/app/data:ro
+      # Volume mount for batch processing output
+      - ./app/output:/app/output:rw
+    networks:
+      - carddemo-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Health checks using Spring Boot Actuator endpoints
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health/liveness"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Resource limits for development
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
+    restart: unless-stopped
+
+  # Prometheus for metrics collection and monitoring
+  # Supports SLO monitoring for transaction response times < 200ms
+  prometheus:
+    image: prom/prometheus:v2.50.1
+    container_name: carddemo-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - carddemo-network
+    depends_on:
+      - app
+    # Health check for Prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Grafana for metrics visualization and dashboards
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: carddemo-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin_dev_password
+      GF_USERS_ALLOW_SIGN_UP: false
+      GF_INSTALL_PLUGINS: prometheus
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - carddemo-network
+    depends_on:
+      - prometheus
+    # Health check for Grafana
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+# Named volumes for persistent data storage
+volumes:
+  # PostgreSQL data persistence
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker/volumes/postgres
+  
+  # Redis data persistence for session storage
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker/volumes/redis
+  
+  # Prometheus metrics storage
+  prometheus_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker/volumes/prometheus
+  
+  # Grafana dashboard storage
+  grafana_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker/volumes/grafana
+
+# Custom network for service-to-service communication
+networks:
+  carddemo-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+    driver_opts:
+      com.docker.network.enable_ipv6: "false"
+      com.docker.network.bridge.name: "carddemo-bridge"
+
+# Development environment profiles and configuration overlays
+# This file supports multiple environments through environment variable overrides:
+#
+# Development Profile (default):
+#   - Debug logging enabled
+#   - All actuator endpoints exposed
+#   - Database migrations enabled
+#   - COBOL-compatible field validation enabled
+#
+# To run with specific environment:
+#   docker-compose up -d
+#
+# To run individual services:
+#   docker-compose up postgres redis  # Database services only
+#   docker-compose up app             # Application only (requires DB services)
+#
+# To view logs:
+#   docker-compose logs -f app        # Application logs
+#   docker-compose logs -f postgres   # Database logs
+#
+# To scale services:
+#   docker-compose up --scale app=2   # Multiple app instances (for load testing)
+#
+# To access services:
+#   Application: http://localhost:8080
+#   Actuator: http://localhost:8081/actuator
+#   Prometheus: http://localhost:9090
+#   Grafana: http://localhost:3000 (admin/admin_dev_password)
+#   PostgreSQL: localhost:5432 (carddemo_user/carddemo_dev_password)
+#   Redis: localhost:6379
