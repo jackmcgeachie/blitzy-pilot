@@ -16,14 +16,16 @@
 
 package com.carddemo.payment;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
-import javax.validation.constraints.DecimalMin;
-import javax.validation.constraints.Digits;
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Pattern;
-import javax.validation.constraints.Size;
+import java.math.RoundingMode;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.util.Objects;
 
 /**
@@ -161,6 +163,7 @@ public class PaymentRequest {
      * 
      * @return true if confirmation is Y/y, false if N/n
      */
+    @JsonIgnore
     public boolean isConfirmationYes() {
         return paymentConfirmation != null && 
                (paymentConfirmation.equalsIgnoreCase("Y") || paymentConfirmation.equalsIgnoreCase("y"));
@@ -171,6 +174,7 @@ public class PaymentRequest {
      * 
      * @return true if account ID is valid 11-digit format
      */
+    @JsonIgnore
     public boolean isAccountIdValid() {
         return accountId != null && accountId.matches("^\\d{11}$");
     }
@@ -180,6 +184,7 @@ public class PaymentRequest {
      * 
      * @return true if payment amount is positive and within valid range
      */
+    @JsonIgnore
     public boolean isPaymentAmountValid() {
         return paymentAmount != null && 
                paymentAmount.compareTo(BigDecimal.ZERO) > 0 &&
@@ -264,7 +269,7 @@ public class PaymentRequest {
          * @return Builder instance for method chaining
          */
         public PaymentRequestBuilder paymentAmount(double paymentAmount) {
-            this.paymentAmount = BigDecimal.valueOf(paymentAmount).setScale(2, BigDecimal.ROUND_HALF_UP);
+            this.paymentAmount = BigDecimal.valueOf(paymentAmount).setScale(2, RoundingMode.HALF_UP);
             return this;
         }
         
@@ -276,7 +281,7 @@ public class PaymentRequest {
          * @return Builder instance for method chaining
          */
         public PaymentRequestBuilder paymentAmount(String paymentAmount) {
-            this.paymentAmount = new BigDecimal(paymentAmount).setScale(2, BigDecimal.ROUND_HALF_UP);
+            this.paymentAmount = new BigDecimal(paymentAmount).setScale(2, RoundingMode.HALF_UP);
             return this;
         }
         
