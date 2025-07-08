@@ -308,7 +308,7 @@ public class Customer implements Serializable {
         return stateCode;
     }
 
-    public void setState(String stateCode) {
+    public void setStateCode(String stateCode) {
         this.stateCode = stateCode;
     }
 
