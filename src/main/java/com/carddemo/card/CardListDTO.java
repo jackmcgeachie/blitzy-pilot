@@ -1,6 +1,7 @@
 package com.carddemo.card;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.Min;
 import java.util.List;
 import java.util.Objects;
@@ -175,6 +176,7 @@ public class CardListDTO {
      * 
      * @return Total number of pages
      */
+    @JsonIgnore
     public int getTotalPages() {
         if (totalRecords == 0 || pageSize == 0) {
             return 0;
@@ -188,6 +190,7 @@ public class CardListDTO {
      * 
      * @return true if current page is the first page
      */
+    @JsonIgnore
     public boolean isFirstPage() {
         return currentPage == 1;
     }
@@ -198,6 +201,7 @@ public class CardListDTO {
      * 
      * @return true if current page is the last page
      */
+    @JsonIgnore
     public boolean isLastPage() {
         return currentPage >= getTotalPages();
     }
@@ -208,6 +212,7 @@ public class CardListDTO {
      * 
      * @return true if next page exists
      */
+    @JsonIgnore
     public boolean hasNext() {
         return currentPage < getTotalPages();
     }
@@ -218,6 +223,7 @@ public class CardListDTO {
      * 
      * @return true if previous page exists
      */
+    @JsonIgnore
     public boolean hasPrevious() {
         return currentPage > 1;
     }
@@ -282,6 +288,7 @@ public class CardListDTO {
      * 
      * @return true if no cards are present
      */
+    @JsonIgnore
     public boolean isEmpty() {
         return cards == null || cards.isEmpty();
     }
@@ -291,6 +298,7 @@ public class CardListDTO {
      * 
      * @return Number of cards in current page
      */
+    @JsonIgnore
     public int getCardCount() {
         return cards != null ? cards.size() : 0;
     }
