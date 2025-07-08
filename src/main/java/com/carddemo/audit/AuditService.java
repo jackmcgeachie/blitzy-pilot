@@ -11,7 +11,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.jwt.JwtHelper;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
 
@@ -585,8 +585,8 @@ public class AuditService {
         record.put("smf_record_type", recordType);
         record.put("smf_timestamp", LocalDateTime.now().format(SMF_TIMESTAMP_FORMAT));
         record.put("smf_date", LocalDateTime.now().toLocalDate().toString());
-        record.put("system_id", systemIdentifier);
-        record.put("subsystem_id", subsystemIdentifier);
+        record.put("system_id", systemIdentifier != null ? systemIdentifier : "CardDemo");
+        record.put("subsystem_id", subsystemIdentifier != null ? subsystemIdentifier : "8080");
         record.put("audit_event_id", auditEventId);
         record.put("event_sequence", auditEventSequence.incrementAndGet());
         
