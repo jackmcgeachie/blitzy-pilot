@@ -5,10 +5,11 @@
 
 package com.carddemo.payment;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import javax.validation.constraints.Size;
+import jakarta.validation.constraints.Size;
 
 /**
  * Payment Response Data Transfer Object
@@ -226,6 +227,7 @@ public class PaymentResponse {
      * 
      * @return true if payment status is SUCCESS, false otherwise
      */
+    @JsonIgnore
     public boolean isSuccess() {
         return "SUCCESS".equals(paymentStatus);
     }
