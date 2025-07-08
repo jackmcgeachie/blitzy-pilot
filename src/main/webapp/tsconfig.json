@@ -36,8 +36,6 @@
     
     // JSX configuration for React 18.x functional components with hooks
     "jsx": "react-jsx",
-    "jsxFactory": "React.createElement",
-    "jsxFragmentFactory": "React.Fragment",
     
     // Enable decorators for potential future use with dependency injection
     "experimentalDecorators": true,
@@ -128,8 +126,7 @@
     "alwaysStrict": true,
     "noPropertyAccessFromIndexSignature": true,
     "useDefineForClassFields": true,
-    "importsNotUsedAsValues": "error",
-    "preserveValueImports": true,
+    "verbatimModuleSyntax": true,
     
     // Emit configuration for debugging and development
     "inlineSourceMap": false,
@@ -141,11 +138,9 @@
     "moduleDetection": "force",
     "allowImportingTsExtensions": false,
     "allowArbitraryExtensions": false,
-    "customConditions": [],
     
     // Performance and build optimization
     "assumeChangesOnlyAffectDirectDependencies": true,
-    "generateCpuProfile": false,
     "disableReferencedProjectLoad": false,
     "disableSolutionSearching": false,
     "disableSourceOfProjectReferenceRedirect": false,
