@@ -34,6 +34,7 @@
         <spring-security.version>6.1.8</spring-security.version>
         <spring-batch.version>5.0.5</spring-batch.version>
         <spring-session.version>3.1.2</spring-session.version>
+        <spring-cloud-gateway.version>4.0.7</spring-cloud-gateway.version>
         
         <!-- Database and persistence -->
         <postgresql.version>42.7.2</postgresql.version>
@@ -52,7 +53,6 @@
         
         <!-- Test dependencies -->
         <testcontainers.version>1.19.7</testcontainers.version>
-        <junit.version>5.10.0</junit.version>
         
         <!-- Maven plugin versions -->
         <maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
@@ -94,43 +94,36 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
-            <description>Spring MVC web framework for REST API controllers replacing CICS transaction processing</description>
         </dependency>
         
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
-            <description>Spring Data JPA for PostgreSQL database access replacing VSAM KSDS file operations</description>
         </dependency>
         
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
-            <description>Spring Security for JWT authentication and role-based authorization replacing RACF security patterns</description>
         </dependency>
         
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-batch</artifactId>
-            <description>Spring Batch for containerized batch processing replacing JCL job streams with 9 Spring Batch jobs</description>
         </dependency>
         
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
-            <description>Spring Boot Actuator for production-ready features including health checks, metrics, and monitoring endpoints</description>
         </dependency>
         
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
-            <description>Bean Validation for field validation replicating COBOL 88-level conditions and BMS field attributes</description>
         </dependency>
         
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-json</artifactId>
-            <description>Jackson JSON processing for REST API serialization/deserialization</description>
         </dependency>
         
         <!-- Spring Session for distributed session management -->
@@ -138,7 +131,13 @@
             <groupId>org.springframework.session</groupId>
             <artifactId>spring-session-data-redis</artifactId>
             <version>${spring-session.version}</version>
-            <description>Spring Session Redis integration for distributed session storage replacing CICS COMMAREA pseudo-conversational state management</description>
+        </dependency>
+        
+        <!-- Spring Cloud Gateway for API routing and cross-cutting concerns -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway</artifactId>
+            <version>${spring-cloud-gateway.version}</version>
         </dependency>
         
         <!-- Database dependencies -->
@@ -146,21 +145,18 @@
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <version>${postgresql.version}</version>
-            <description>PostgreSQL JDBC driver for database connectivity and SQL operations with enterprise-grade ACID compliance</description>
         </dependency>
         
         <dependency>
             <groupId>com.zaxxer</groupId>
             <artifactId>HikariCP</artifactId>
             <version>${hikaricp.version}</version>
-            <description>High-performance JDBC connection pool for optimized database connection management supporting 10,000 TPS transaction capacity</description>
         </dependency>
         
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
             <version>${flyway.version}</version>
-            <description>Flyway database migration framework for version-controlled schema evolution and data loading from ASCII files</description>
         </dependency>
         
         <!-- Monitoring and observability -->
@@ -168,14 +164,12 @@
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
             <version>${micrometer.version}</version>
-            <description>Micrometer Prometheus registry for metrics collection and monitoring integration supporting SLA compliance tracking</description>
         </dependency>
         
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-core</artifactId>
             <version>${micrometer.version}</version>
-            <description>Micrometer core metrics library for JVM performance, HTTP request statistics, and custom business metrics</description>
         </dependency>
         
         <!-- Reporting and document generation -->
@@ -183,7 +177,6 @@
             <groupId>net.sf.jasperreports</groupId>
             <artifactId>jasperreports</artifactId>
             <version>${jasperreports.version}</version>
-            <description>JasperReports enterprise reporting engine for PDF, Excel, and HTML report generation replacing COBOL report programs</description>
         </dependency>
         
         <!-- Utility libraries -->
@@ -191,14 +184,12 @@
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
             <version>${commons-lang3.version}</version>
-            <description>Apache Commons Lang for string processing, date manipulation, and utility functions replacing COBOL utility copybooks</description>
         </dependency>
         
         <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
             <version>${commons-io.version}</version>
-            <description>Apache Commons IO for file processing utilities, fixed-width file parsing, and legacy file interface compatibility</description>
         </dependency>
         
         <!-- Development tools -->
@@ -207,14 +198,12 @@
             <artifactId>spring-boot-devtools</artifactId>
             <scope>runtime</scope>
             <optional>true</optional>
-            <description>Spring Boot development tools for automatic restart, live reload, and enhanced development experience</description>
         </dependency>
         
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-configuration-processor</artifactId>
             <optional>true</optional>
-            <description>Spring Boot configuration processor for generating configuration metadata</description>
         </dependency>
         
         <!-- Test dependencies -->
@@ -222,7 +211,6 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
-            <description>Spring Boot test starter with JUnit, Mockito, and Spring Test for comprehensive unit testing</description>
         </dependency>
         
         <dependency>
@@ -230,7 +218,6 @@
             <artifactId>spring-security-test</artifactId>
             <version>${spring-security.version}</version>
             <scope>test</scope>
-            <description>Spring Security test support for mock authentication and security integration testing</description>
         </dependency>
         
         <dependency>
@@ -238,28 +225,24 @@
             <artifactId>spring-batch-test</artifactId>
             <version>${spring-batch.version}</version>
             <scope>test</scope>
-            <description>Spring Batch test support for batch job testing and validation</description>
         </dependency>
         
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
-            <description>TestContainers JUnit 5 integration for containerized integration testing</description>
         </dependency>
         
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>postgresql</artifactId>
             <scope>test</scope>
-            <description>TestContainers PostgreSQL module for containerized database testing</description>
         </dependency>
         
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers</artifactId>
             <scope>test</scope>
-            <description>TestContainers core library for integration testing with realistic database operations</description>
         </dependency>
     </dependencies>
     
