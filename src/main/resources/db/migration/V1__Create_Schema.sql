@@ -828,16 +828,16 @@ DECLARE
         'card_account_xref', 'customer_account_xref', 'category_balances',
         'discount_groups', 'transaction_categories', 'transaction_types'
     ];
-    table_name TEXT;
+    current_table_name TEXT;
 BEGIN
-    FOREACH table_name IN ARRAY expected_tables
+    FOREACH current_table_name IN ARRAY expected_tables
     LOOP
         SELECT COUNT(*) INTO table_count 
         FROM information_schema.tables 
-        WHERE table_schema = 'public' AND table_name = table_name;
+        WHERE table_schema = 'public' AND table_name = current_table_name;
         
         IF table_count = 0 THEN
-            RAISE EXCEPTION 'Required table % was not created', table_name;
+            RAISE EXCEPTION 'Required table % was not created', current_table_name;
         END IF;
     END LOOP;
     
@@ -901,18 +901,18 @@ DECLARE
         'fk_category_balances_account',
         'fk_category_balances_category'
     ];
-    constraint_name TEXT;
+    current_constraint_name TEXT;
 BEGIN
-    FOREACH constraint_name IN ARRAY expected_constraints
+    FOREACH current_constraint_name IN ARRAY expected_constraints
     LOOP
         SELECT COUNT(*) INTO constraint_count
         FROM information_schema.table_constraints
         WHERE constraint_schema = 'public' 
-        AND constraint_name = constraint_name
+        AND constraint_name = current_constraint_name
         AND constraint_type = 'FOREIGN KEY';
         
         IF constraint_count = 0 THEN
-            RAISE EXCEPTION 'Required foreign key constraint % was not created', constraint_name;
+            RAISE EXCEPTION 'Required foreign key constraint % was not created', current_constraint_name;
         END IF;
     END LOOP;
     
