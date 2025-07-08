@@ -203,14 +203,14 @@ public class Account implements Serializable {
                   BigDecimal currentCycleDebit, String addressZip, String groupId) {
         this.accountId = accountId;
         this.activeStatus = activeStatus;
-        this.currentBalance = currentBalance != null ? currentBalance.setScale(2) : BigDecimal.ZERO.setScale(2);
-        this.creditLimit = creditLimit != null ? creditLimit.setScale(2) : BigDecimal.ZERO.setScale(2);
-        this.cashCreditLimit = cashCreditLimit != null ? cashCreditLimit.setScale(2) : BigDecimal.ZERO.setScale(2);
+        this.currentBalance = currentBalance != null ? currentBalance.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+        this.creditLimit = creditLimit != null ? creditLimit.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+        this.cashCreditLimit = cashCreditLimit != null ? cashCreditLimit.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
         this.openDate = openDate;
         this.expirationDate = expirationDate;
         this.reissueDate = reissueDate;
-        this.currentCycleCredit = currentCycleCredit != null ? currentCycleCredit.setScale(2) : BigDecimal.ZERO.setScale(2);
-        this.currentCycleDebit = currentCycleDebit != null ? currentCycleDebit.setScale(2) : BigDecimal.ZERO.setScale(2);
+        this.currentCycleCredit = currentCycleCredit != null ? currentCycleCredit.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+        this.currentCycleDebit = currentCycleDebit != null ? currentCycleDebit.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
         this.addressZip = addressZip;
         this.groupId = groupId;
     }
@@ -238,7 +238,7 @@ public class Account implements Serializable {
     }
     
     public void setCurrentBalance(BigDecimal currentBalance) {
-        this.currentBalance = currentBalance != null ? currentBalance.setScale(2) : BigDecimal.ZERO.setScale(2);
+        this.currentBalance = currentBalance != null ? currentBalance.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
     }
     
     public BigDecimal getCreditLimit() {
@@ -246,7 +246,7 @@ public class Account implements Serializable {
     }
     
     public void setCreditLimit(BigDecimal creditLimit) {
-        this.creditLimit = creditLimit != null ? creditLimit.setScale(2) : BigDecimal.ZERO.setScale(2);
+        this.creditLimit = creditLimit != null ? creditLimit.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
     }
     
     public BigDecimal getCashCreditLimit() {
@@ -254,7 +254,7 @@ public class Account implements Serializable {
     }
     
     public void setCashCreditLimit(BigDecimal cashCreditLimit) {
-        this.cashCreditLimit = cashCreditLimit != null ? cashCreditLimit.setScale(2) : BigDecimal.ZERO.setScale(2);
+        this.cashCreditLimit = cashCreditLimit != null ? cashCreditLimit.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
     }
     
     public LocalDate getOpenDate() {
@@ -286,7 +286,7 @@ public class Account implements Serializable {
     }
     
     public void setCurrentCycleCredit(BigDecimal currentCycleCredit) {
-        this.currentCycleCredit = currentCycleCredit != null ? currentCycleCredit.setScale(2) : BigDecimal.ZERO.setScale(2);
+        this.currentCycleCredit = currentCycleCredit != null ? currentCycleCredit.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
     }
     
     public BigDecimal getCurrentCycleDebit() {
@@ -294,7 +294,7 @@ public class Account implements Serializable {
     }
     
     public void setCurrentCycleDebit(BigDecimal currentCycleDebit) {
-        this.currentCycleDebit = currentCycleDebit != null ? currentCycleDebit.setScale(2) : BigDecimal.ZERO.setScale(2);
+        this.currentCycleDebit = currentCycleDebit != null ? currentCycleDebit.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
     }
     
     public String getAddressZip() {
@@ -361,7 +361,7 @@ public class Account implements Serializable {
         if (creditLimit == null || currentBalance == null) {
             return BigDecimal.ZERO.setScale(2);
         }
-        return creditLimit.subtract(currentBalance).setScale(2);
+        return creditLimit.subtract(currentBalance).setScale(2, java.math.RoundingMode.HALF_UP);
     }
     
     /**
@@ -374,7 +374,7 @@ public class Account implements Serializable {
         if (cashCreditLimit == null || currentBalance == null) {
             return BigDecimal.ZERO.setScale(2);
         }
-        return cashCreditLimit.subtract(currentBalance).setScale(2);
+        return cashCreditLimit.subtract(currentBalance).setScale(2, java.math.RoundingMode.HALF_UP);
     }
     
     /**
