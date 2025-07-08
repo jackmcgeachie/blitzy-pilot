@@ -1,6 +1,7 @@
 package com.carddemo.entity;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -364,7 +365,7 @@ public class Account {
      * @param currentBalance the current account balance with 2 decimal places
      */
     public void setCurrentBalance(BigDecimal currentBalance) {
-        this.currentBalance = currentBalance != null ? currentBalance.setScale(2, BigDecimal.ROUND_HALF_UP) : BigDecimal.ZERO;
+        this.currentBalance = currentBalance != null ? currentBalance.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
     }
 
     /**
@@ -372,7 +373,7 @@ public class Account {
      * @param creditLimit the account credit limit with 2 decimal places
      */
     public void setCreditLimit(BigDecimal creditLimit) {
-        this.creditLimit = creditLimit != null ? creditLimit.setScale(2, BigDecimal.ROUND_HALF_UP) : BigDecimal.ZERO;
+        this.creditLimit = creditLimit != null ? creditLimit.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
     }
 
     /**
@@ -380,7 +381,7 @@ public class Account {
      * @param cashCreditLimit the cash advance credit limit with 2 decimal places
      */
     public void setCashCreditLimit(BigDecimal cashCreditLimit) {
-        this.cashCreditLimit = cashCreditLimit != null ? cashCreditLimit.setScale(2, BigDecimal.ROUND_HALF_UP) : BigDecimal.ZERO;
+        this.cashCreditLimit = cashCreditLimit != null ? cashCreditLimit.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
     }
 
     /**
@@ -412,7 +413,7 @@ public class Account {
      * @param currentCycleCredit the current cycle credit amount with 2 decimal places
      */
     public void setCurrentCycleCredit(BigDecimal currentCycleCredit) {
-        this.currentCycleCredit = currentCycleCredit != null ? currentCycleCredit.setScale(2, BigDecimal.ROUND_HALF_UP) : BigDecimal.ZERO;
+        this.currentCycleCredit = currentCycleCredit != null ? currentCycleCredit.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
     }
 
     /**
@@ -420,7 +421,7 @@ public class Account {
      * @param currentCycleDebit the current cycle debit amount with 2 decimal places
      */
     public void setCurrentCycleDebit(BigDecimal currentCycleDebit) {
-        this.currentCycleDebit = currentCycleDebit != null ? currentCycleDebit.setScale(2, BigDecimal.ROUND_HALF_UP) : BigDecimal.ZERO;
+        this.currentCycleDebit = currentCycleDebit != null ? currentCycleDebit.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
     }
 
     /**
