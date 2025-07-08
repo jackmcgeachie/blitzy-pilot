@@ -5,29 +5,6 @@
 # Default user-agent directive for all web crawlers
 User-agent: *
 
-# ALLOWED AREAS - Public application content for legitimate business discovery
-# Allow indexing of main application landing pages
-Allow: /
-Allow: /index.html
-Allow: /login
-Allow: /welcome
-Allow: /about
-Allow: /contact
-Allow: /help
-Allow: /documentation
-Allow: /privacy
-Allow: /terms
-Allow: /security
-
-# Allow static assets for proper page rendering in search results
-Allow: /static/
-Allow: /assets/
-Allow: /images/
-Allow: /css/
-Allow: /js/
-Allow: /favicon.ico
-Allow: /manifest.json
-
 # PROTECTED AREAS - Sensitive application functionality and endpoints
 # Disallow all API endpoints to prevent unauthorized access discovery
 Disallow: /api/
@@ -104,7 +81,6 @@ Disallow: /info/
 Disallow: /env/
 
 # Disallow configuration and system files
-Disallow: /config/
 Disallow: /properties/
 Disallow: /application.yml
 Disallow: /application.properties
@@ -152,6 +128,15 @@ Disallow: /personal-data/
 Disallow: /ssn/
 Disallow: /pii/
 
+# ALLOWED AREAS - Static assets for proper page rendering
+Allow: /static/
+Allow: /assets/
+Allow: /images/
+Allow: /css/
+Allow: /js/
+Allow: /favicon.ico
+Allow: /manifest.json
+
 # SEARCH ENGINE OPTIMIZATION CONFIGURATION
 # Reference comprehensive sitemap for proper indexing
 Sitemap: https://carddemo.example.com/sitemap.xml
@@ -164,7 +149,6 @@ Crawl-delay: 10
 # Google-specific directives for enhanced SEO
 User-agent: Googlebot
 Crawl-delay: 5
-Allow: /
 Disallow: /api/
 Disallow: /admin/
 Disallow: /auth/
@@ -172,7 +156,6 @@ Disallow: /auth/
 # Bing-specific directives
 User-agent: bingbot
 Crawl-delay: 10
-Allow: /
 Disallow: /api/
 Disallow: /admin/
 Disallow: /auth/
