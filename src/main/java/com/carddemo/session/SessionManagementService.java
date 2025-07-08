@@ -37,10 +37,8 @@
 
 package com.carddemo.session;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.session.SessionRepository;
 import org.springframework.stereotype.Service;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -73,7 +71,8 @@ import java.math.BigDecimal;
 @Service
 public class SessionManagementService {
 
-    private final SessionRepository sessionRepository;
+    // Note: With Spring Session, HttpSession automatically uses Redis when configured
+    // No need to directly inject SessionRepository for standard session operations
     
     // Session attribute key constants for COMMAREA equivalent structures
     private static final String GENERAL_INFO_KEY = "cdemo_general_info";
@@ -93,13 +92,13 @@ public class SessionManagementService {
     private static final Duration MAX_SESSION_TIMEOUT = Duration.ofHours(8);
     
     /**
-     * Constructor for SessionManagementService with dependency injection
+     * Constructor for SessionManagementService
      * 
-     * @param sessionRepository Spring Session repository for Redis operations
+     * Spring Session automatically manages Redis storage for HttpSession
+     * when configured with @EnableRedisHttpSession
      */
-    @Autowired
-    public SessionManagementService(SessionRepository sessionRepository) {
-        this.sessionRepository = sessionRepository;
+    public SessionManagementService() {
+        // No dependencies needed - Spring Session handles Redis storage automatically
     }
     
     /**
@@ -118,17 +117,14 @@ public class SessionManagementService {
         validateAttributeName(attributeName);
         
         try {
-            // Get or create session from Spring Session
+            // Get or create session - Spring Session automatically handles Redis storage
             var session = getOrCreateSession(request);
             
             // Update last accessed time for session lifecycle management
             session.setAttribute(LAST_ACCESSED_TIME_KEY, Instant.now());
             
-            // Set the requested attribute with proper serialization
+            // Set the requested attribute - Spring Session automatically persists to Redis
             session.setAttribute(attributeName, attributeValue);
-            
-            // Persist session changes to Redis
-            sessionRepository.save(session);
             
         } catch (Exception e) {
             throw new SessionException("Failed to set session attribute: " + attributeName, e);
@@ -153,9 +149,8 @@ public class SessionManagementService {
                 return Optional.empty();
             }
             
-            // Update last accessed time
+            // Update last accessed time - Spring Session automatically persists to Redis
             session.setAttribute(LAST_ACCESSED_TIME_KEY, Instant.now());
-            sessionRepository.save(session);
             
             return Optional.ofNullable(session.getAttribute(attributeName));
             
@@ -179,8 +174,8 @@ public class SessionManagementService {
             var session = request.getSession(false);
             if (session != null) {
                 session.removeAttribute(attributeName);
+                // Update last accessed time - Spring Session automatically persists to Redis
                 session.setAttribute(LAST_ACCESSED_TIME_KEY, Instant.now());
-                sessionRepository.save(session);
             }
             
         } catch (Exception e) {
@@ -327,7 +322,7 @@ public class SessionManagementService {
      * @param request HTTP servlet request
      * @return Session object for attribute operations
      */
-    private javax.servlet.http.HttpSession getOrCreateSession(HttpServletRequest request) {
+    private jakarta.servlet.http.HttpSession getOrCreateSession(HttpServletRequest request) {
         var session = request.getSession(true);
         
         // Initialize session if newly created
@@ -344,7 +339,7 @@ public class SessionManagementService {
      * @param session New session to initialize
      * @param request HTTP servlet request for context
      */
-    private void initializeNewSession(javax.servlet.http.HttpSession session, HttpServletRequest request) {
+    private void initializeNewSession(jakarta.servlet.http.HttpSession session, HttpServletRequest request) {
         Instant now = Instant.now();
         
         // Set session lifecycle timestamps
@@ -372,7 +367,7 @@ public class SessionManagementService {
      * 
      * @param session Session to initialize
      */
-    private void initializeCommareaStructures(javax.servlet.http.HttpSession session) {
+    private void initializeCommareaStructures(jakarta.servlet.http.HttpSession session) {
         // Initialize general info structure (equivalent to CDEMO-GENERAL-INFO)
         Map<String, Object> generalInfo = new HashMap<>();
         generalInfo.put("fromTransactionId", "");
@@ -424,7 +419,7 @@ public class SessionManagementService {
      * 
      * @param session Session to clean up
      */
-    private void cleanupCommareaData(javax.servlet.http.HttpSession session) {
+    private void cleanupCommareaData(jakarta.servlet.http.HttpSession session) {
         // Remove all COMMAREA-equivalent structures
         session.removeAttribute(GENERAL_INFO_KEY);
         session.removeAttribute(CUSTOMER_INFO_KEY);
