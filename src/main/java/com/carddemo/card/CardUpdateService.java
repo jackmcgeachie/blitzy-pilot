@@ -498,7 +498,8 @@ public class CardUpdateService {
         
         // Log security event for concurrent modification attempt
         auditService.logSecurityEvent("CONCURRENT_MODIFICATION_DETECTED", "MEDIUM", 
-            "Card update failed due to concurrent modification");
+            "Card update failed due to concurrent modification", 
+            java.util.Map.of("event_type", "CONCURRENT_MODIFICATION", "severity", "MEDIUM"));
         
         throw validationException;
     }
@@ -519,7 +520,11 @@ public class CardUpdateService {
         try {
             // Log transaction event for audit trail
             auditService.logTransactionEvent("CARD_UPDATE_SERVICE", operation, 
-                cardNumber, description);
+                cardNumber, 0.0, java.util.Map.of(
+                    "description", description,
+                    "card_number_hash", cardNumber.hashCode(),
+                    "timestamp", System.currentTimeMillis()
+                ));
             
             // Log data access event
             auditService.logDataAccessEvent("CARD_UPDATE", "CARD_MODIFICATION", 
@@ -552,8 +557,8 @@ public class CardUpdateService {
         // For now, basic validation that user is authenticated
         
         try {
-            // Get current user context from session
-            String currentUser = sessionManagementService.getSessionAttribute("current_user");
+            // Get current user context from Spring Security (since this is a service layer)
+            String currentUser = getCurrentUserFromSecurity();
             if (currentUser == null) {
                 throw new CardValidationException("User not authenticated for card update");
             }
@@ -687,12 +692,13 @@ public class CardUpdateService {
 
     /**
      * Updates session state after card update operations.
+     * Note: Session management moved to controller layer for proper request handling.
      */
     private void updateSessionState(Card card) {
         try {
-            sessionManagementService.setSessionAttribute("last_updated_card", card.getCardNumber());
-            sessionManagementService.setSessionAttribute("card_update_timestamp", 
-                                                        System.currentTimeMillis());
+            // Session state updates should be handled at controller level
+            // where HttpServletRequest is available
+            logger.debug("Card update completed for card: {}", card.getCardNumber());
         } catch (Exception e) {
             logger.warn("Failed to update session state: {}", e.getMessage());
         }
@@ -709,5 +715,25 @@ public class CardUpdateService {
         cardDetailDTO.maskSensitiveData(); // Ensure CVV is masked
         
         return cardDetailDTO;
+    }
+
+    /**
+     * Gets current user from Spring Security context.
+     */
+    private String getCurrentUserFromSecurity() {
+        try {
+            // Get current user from Spring Security context
+            org.springframework.security.core.context.SecurityContext securityContext = 
+                org.springframework.security.core.context.SecurityContextHolder.getContext();
+            
+            if (securityContext != null && securityContext.getAuthentication() != null) {
+                return securityContext.getAuthentication().getName();
+            }
+            
+            return null;
+        } catch (Exception e) {
+            logger.warn("Failed to get current user from security context: {}", e.getMessage());
+            return null;
+        }
     }
 }
