@@ -206,10 +206,14 @@ public class TransactionService {
             Optional<Transaction> transactionOpt = transactionRepository.findById(transactionId);
             
             if (transactionOpt.isEmpty()) {
+                Map<String, Object> affectedComponents = new HashMap<>();
+                affectedComponents.put("transaction_id", transactionId);
+                affectedComponents.put("username", getCurrentUsername());
                 auditService.logSecurityEvent(
                     "TRANSACTION_NOT_FOUND",
                     "MEDIUM",
-                    "Attempt to access non-existent transaction: " + transactionId
+                    "Attempt to access non-existent transaction: " + transactionId,
+                    affectedComponents
                 );
                 throw new EntityNotFoundException("Transaction ID NOT found: " + transactionId);
             }
@@ -881,10 +885,16 @@ public class TransactionService {
         );
         
         if (!duplicates.isEmpty()) {
+            Map<String, Object> affectedComponents = new HashMap<>();
+            affectedComponents.put("card_number", maskCardNumber(transaction.getCardNumber()));
+            affectedComponents.put("transaction_amount", transaction.getTransactionAmount());
+            affectedComponents.put("merchant_name", transaction.getMerchantName());
+            affectedComponents.put("duplicate_count", duplicates.size());
             auditService.logSecurityEvent(
                 AUDIT_DUPLICATE_DETECTED,
                 "HIGH",
-                "Duplicate transaction detected for card: " + maskCardNumber(transaction.getCardNumber())
+                "Duplicate transaction detected for card: " + maskCardNumber(transaction.getCardNumber()),
+                affectedComponents
             );
             throw new IllegalArgumentException("Duplicate transaction detected");
         }
@@ -1122,19 +1132,4 @@ public class TransactionService {
         public String getMessage() { return message; }
         public Transaction getTransaction() { return transaction; }
     }
-}
-
-/**
- * Generates a unique transaction ID with timestamp and random components
- * 
- * @return 16-character transaction identifier
- */
-String generateTransactionId() {
-    // Generate timestamp-based ID with random component
-    long timestamp = System.currentTimeMillis();
-    String randomPart = UUID.randomUUID().toString().replaceAll("-", "").substring(0, 6);
-    String transactionId = String.format("%010d%s", timestamp % 10000000000L, randomPart);
-    
-    // Ensure exactly 16 characters
-    return transactionId.substring(0, 16).toUpperCase();
 }
