@@ -159,8 +159,8 @@ public class CardDetailService {
             // Create comprehensive card detail DTO
             CardDetailDTO cardDetail = new CardDetailDTO(card, account);
             
-            // Update session context with card detail access
-            updateSessionContext(cardNumber, card.getAccountId());
+            // Session context update should be handled at the controller layer
+            // updateSessionContext(cardNumber, card.getAccountId());
             
             logger.info("Successfully retrieved card details for card ending in: {}", cardNumber.substring(cardNumber.length() - 4));
             return cardDetail;
@@ -254,8 +254,8 @@ public class CardDetailService {
             // Create card detail DTO
             CardDetailDTO cardDetail = new CardDetailDTO(card, account);
             
-            // Update session context with search activity
-            updateSessionContext(cardNumber, card.getAccountId());
+            // Session context update should be handled at the controller layer
+            // updateSessionContext(cardNumber, card.getAccountId());
             
             logger.info("Successfully found card during search for card ending in: {}", cardNumber.substring(cardNumber.length() - 4));
             return Optional.of(cardDetail);
@@ -332,8 +332,8 @@ public class CardDetailService {
             // Create comprehensive card detail DTO
             CardDetailDTO cardDetail = new CardDetailDTO(card, account);
             
-            // Update session with comprehensive access context
-            updateSessionContext(cardNumber, card.getAccountId());
+            // Session context update should be handled at the controller layer
+            // updateSessionContext(cardNumber, card.getAccountId());
             
             logger.info("Successfully retrieved comprehensive card information for card ending in: {}", cardNumber.substring(cardNumber.length() - 4));
             return cardDetail;
@@ -498,8 +498,8 @@ public class CardDetailService {
             cardDetail.setLastModifiedBy(getCurrentUser());
             cardDetail.setLastAccessedDate(java.time.LocalDate.now());
             
-            // Update session with full detail access context
-            updateSessionContext(cardNumber, card.getAccountId());
+            // Session context update should be handled at the controller layer
+            // updateSessionContext(cardNumber, card.getAccountId());
             
             logger.info("Successfully retrieved full card details for card ending in: {}", cardNumber.substring(cardNumber.length() - 4));
             return cardDetail;
@@ -582,32 +582,25 @@ public class CardDetailService {
     /**
      * Updates session context with card detail access information.
      * 
+     * NOTE: This method has been moved to the controller layer where HttpServletRequest
+     * is available. Service layer should not directly manage session attributes.
+     * 
      * @param cardNumber Card number accessed
      * @param accountId Related account ID
      */
+    /*
     private void updateSessionContext(String cardNumber, String accountId) {
         try {
-            // Update session attributes with card detail access context
-            sessionManagementService.setSessionAttribute(
-                "last_accessed_card", 
-                cardNumber.substring(cardNumber.length() - 4)
-            );
-            
-            sessionManagementService.setSessionAttribute(
-                "last_accessed_account", 
-                accountId
-            );
-            
-            sessionManagementService.setSessionAttribute(
-                "last_card_access_time", 
-                java.time.LocalDateTime.now().toString()
-            );
+            // Session management should be handled at the controller layer
+            // where HttpServletRequest is available
+            // This method is kept for reference but should not be used
             
         } catch (Exception e) {
             logger.warn("Failed to update session context for card access", e);
             // Continue processing even if session update fails
         }
     }
+    */
 
     /**
      * Gets the current authenticated user from the security context.
