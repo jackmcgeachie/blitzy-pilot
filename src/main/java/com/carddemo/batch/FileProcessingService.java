@@ -61,7 +61,7 @@ import org.springframework.batch.item.file.mapping.DefaultLineMapper;
 import java.nio.file.Paths;
 import java.nio.charset.Charset;
 import org.apache.commons.lang3.StringUtils;
-import javax.validation.Validator;
+import jakarta.validation.Validator;
 import java.math.BigDecimal;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
@@ -81,6 +81,7 @@ import org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor;
 import org.springframework.batch.item.file.transform.FieldSet;
 import org.springframework.batch.item.file.transform.Range;
 import org.springframework.validation.BindException;
+import org.springframework.validation.FieldError;
 
 import java.io.IOException;
 import java.io.BufferedReader;
@@ -291,7 +292,9 @@ public class FileProcessingService {
         
         // Configure FlatFileItemWriter
         FlatFileItemWriter<T> writer = new FlatFileItemWriter<>();
-        writer.setResource(resource);
+        writer.setResource(resource instanceof org.springframework.core.io.WritableResource ? 
+                          (org.springframework.core.io.WritableResource)resource : 
+                          new org.springframework.core.io.FileSystemResource(resource.getFile()));
         writer.setEncoding(characterEncoding);
         writer.setShouldDeleteIfExists(true);
         writer.setShouldDeleteIfEmpty(false);
@@ -1840,11 +1843,12 @@ public class FileProcessingService {
         
         @Override
         public T mapFieldSet(FieldSet fieldSet) throws BindException {
+            T object = null;
             try {
                 // Use BeanWrapperFieldSetMapper for basic mapping
                 BeanWrapperFieldSetMapper<T> mapper = new BeanWrapperFieldSetMapper<>();
                 mapper.setTargetType(targetType);
-                T object = mapper.mapFieldSet(fieldSet);
+                object = mapper.mapFieldSet(fieldSet);
                 
                 // Perform additional COBOL-specific validation
                 if (validator != null) {
@@ -1853,7 +1857,9 @@ public class FileProcessingService {
                 
                 return object;
             } catch (Exception e) {
-                throw new BindException(targetType, "target", e.getMessage());
+                BindException bindException = new BindException(object != null ? object : targetType, "target");
+                bindException.addError(new FieldError("target", "target", e.getMessage()));
+                throw bindException;
             }
         }
     }
