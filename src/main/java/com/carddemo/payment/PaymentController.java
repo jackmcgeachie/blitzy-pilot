@@ -325,7 +325,7 @@ public class PaymentController {
                 getCurrentUsername(),
                 "ACCOUNT_BALANCE_RETRIEVAL",
                 "ACCOUNT",
-                accountId,
+                1,
                 auditDetails
             );
             
