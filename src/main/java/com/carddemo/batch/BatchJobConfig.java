@@ -147,7 +147,7 @@ public class BatchJobConfig {
         
         // Configure database connection using optimized HikariCP DataSource
         factory.setDataSource(databaseConfig.dataSource());
-        factory.setTransactionManager(databaseConfig.transactionManager());
+        factory.setTransactionManager(databaseConfig.transactionManager(databaseConfig.entityManagerFactory(databaseConfig.dataSource())));
         
         // Set database type and schema initialization
         factory.setDatabaseType("POSTGRESQL");
@@ -458,7 +458,7 @@ public class BatchJobConfig {
         logger.info("Configuring batch-specific transaction manager");
         
         // Leverage the optimized transaction manager from DatabaseConfig
-        PlatformTransactionManager transactionManager = databaseConfig.transactionManager();
+        PlatformTransactionManager transactionManager = databaseConfig.transactionManager(databaseConfig.entityManagerFactory(databaseConfig.dataSource()));
         
         logger.info("Batch transaction manager configured successfully");
         
@@ -556,7 +556,7 @@ public class BatchJobConfig {
         
         return new SkipPolicy() {
             @Override
-            public boolean shouldSkip(Throwable exception, int skipCount) throws SkipLimitExceededException {
+            public boolean shouldSkip(Throwable exception, long skipCount) throws SkipLimitExceededException {
                 // Check if skip limit has been exceeded
                 if (skipCount >= maxSkipCount) {
                     logger.error("Skip limit exceeded: {} >= {}", skipCount, maxSkipCount);
@@ -618,7 +618,7 @@ public class BatchJobConfig {
         executor.setMaxPoolSize(maxPoolSize);
         executor.setQueueCapacity(queueCapacity);
         executor.setThreadNamePrefix(threadNamePrefix);
-        executor.setRejectedExecutionHandler(new ThreadPoolTaskExecutor.CallerRunsPolicy());
+        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
         executor.initialize();
