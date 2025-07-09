@@ -131,7 +131,7 @@ public class CardNotFoundException extends RuntimeException {
         super(message);
         this.correlationId = generateCorrelationId();
         this.timestamp = LocalDateTime.now();
-        this.cardIdentifier = cardIdentifier != null ? cardIdentifier : "UNKNOWN";
+        this.cardIdentifier = (cardIdentifier != null && !cardIdentifier.trim().isEmpty()) ? cardIdentifier : "UNKNOWN";
         logToAuditService();
     }
     
@@ -150,7 +150,7 @@ public class CardNotFoundException extends RuntimeException {
         super(message, cause);
         this.correlationId = generateCorrelationId();
         this.timestamp = LocalDateTime.now();
-        this.cardIdentifier = cardIdentifier != null ? cardIdentifier : "UNKNOWN";
+        this.cardIdentifier = (cardIdentifier != null && !cardIdentifier.trim().isEmpty()) ? cardIdentifier : "UNKNOWN";
         logToAuditService();
     }
     
