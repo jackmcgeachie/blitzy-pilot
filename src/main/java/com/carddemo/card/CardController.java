@@ -191,7 +191,8 @@ public class CardController {
             Pageable pageable = PageRequest.of(page, size, sort);
             
             // Delegate to specialized card list service
-            CardListDTO cardListDTO = cardListService.getCardListWithPagination(pageable);
+            org.springframework.data.domain.Page<Card> cardPage = cardListService.getCardListWithPagination(pageable);
+            CardListDTO cardListDTO = cardListService.buildCardListResponse(cardPage);
             
             // Log successful operation
             auditService.logDataAccessEvent(principal.getName(), "CARDS", "READ", 
@@ -202,8 +203,9 @@ public class CardController {
             
         } catch (Exception e) {
             logger.error("Error in getAllCards", e);
-            auditService.logSecurityEvent(principal.getName(), "CARD_LIST_ERROR", "READ_ERROR", 
-                                        1, createAuditDetails("getAllCards", "ERROR: " + e.getMessage(), page, size));
+            auditService.logSecurityEvent("CARD_LIST_ERROR", "READ_ERROR", 
+                                        "ERROR: " + e.getMessage(), 
+                                        createAuditDetails("getAllCards", "ERROR", page, size));
             throw new RuntimeException("Error retrieving card list", e);
         }
     }
@@ -239,8 +241,10 @@ public class CardController {
                    principal.getName(), accountId, page, size);
         
         try {
-            // Validate account ID using CardValidator
-            cardValidator.validateCard(accountId);
+            // Validate account ID format
+            if (!accountId.matches("^\\d{11}$")) {
+                throw new CardValidationException("ACCOUNT FILTER,IF SUPPLIED MUST BE A 11 DIGIT NUMBER");
+            }
             
             // Store navigation context in session
             Map<String, Object> cardContext = new HashMap<>();
@@ -260,7 +264,8 @@ public class CardController {
             Pageable pageable = PageRequest.of(page, size, Sort.by("cardNumber").ascending());
             
             // Delegate to specialized card list service
-            CardListDTO cardListDTO = cardListService.getCardListByAccountId(accountId, pageable);
+            org.springframework.data.domain.Page<Card> cardPage = cardListService.getCardListByAccountIdWithPagination(accountId, pageable);
+            CardListDTO cardListDTO = cardListService.buildCardListResponse(cardPage);
             
             // Log successful operation
             auditService.logDataAccessEvent(principal.getName(), "CARDS", "READ", 
@@ -271,13 +276,15 @@ public class CardController {
             
         } catch (CardValidationException e) {
             logger.warn("Invalid account ID provided: {}", accountId);
-            auditService.logSecurityEvent(principal.getName(), "CARD_ACCOUNT_INVALID", "VALIDATION_ERROR", 
-                                        1, createAuditDetails("getCardsByAccount", "VALIDATION_ERROR", accountId, page, size));
+            auditService.logSecurityEvent("CARD_ACCOUNT_INVALID", "VALIDATION_ERROR", 
+                                        "Invalid account ID: " + accountId, 
+                                        createAuditDetails("getCardsByAccount", "VALIDATION_ERROR", accountId, page, size));
             throw e;
         } catch (Exception e) {
             logger.error("Error in getCardsByAccount", e);
-            auditService.logSecurityEvent(principal.getName(), "CARD_ACCOUNT_ERROR", "READ_ERROR", 
-                                        1, createAuditDetails("getCardsByAccount", "ERROR: " + e.getMessage(), accountId, page, size));
+            auditService.logSecurityEvent("CARD_ACCOUNT_ERROR", "READ_ERROR", 
+                                        "ERROR: " + e.getMessage(), 
+                                        createAuditDetails("getCardsByAccount", "ERROR", accountId, page, size));
             throw new RuntimeException("Error retrieving cards for account", e);
         }
     }
@@ -322,33 +329,36 @@ public class CardController {
             sessionManagementService.setSessionAttribute(request, SESSION_ATTR_CARD_CONTEXT, cardContext);
             
             // Delegate to specialized card detail service
-            Optional<CardDetailDTO> cardDetailDTO = cardDetailService.getCardDetails(cardNumber);
+            CardDetailDTO cardDetailDTO = cardDetailService.getCardDetails(cardNumber);
             
-            if (cardDetailDTO.isPresent()) {
+            if (cardDetailDTO != null) {
                 // Log successful operation
                 auditService.logDataAccessEvent(principal.getName(), "CARDS", "READ", 
                                               1, createAuditDetails("getCardDetails", "SUCCESS", cardNumber));
                 
-                return ResponseEntity.ok(cardDetailDTO.get());
+                return ResponseEntity.ok(cardDetailDTO);
             } else {
                 // Card not found
-                auditService.logSecurityEvent(principal.getName(), "CARD_NOT_FOUND", "READ_ERROR", 
-                                            1, createAuditDetails("getCardDetails", "NOT_FOUND", cardNumber));
+                auditService.logSecurityEvent("CARD_NOT_FOUND", "READ_ERROR", 
+                                            "Card not found: " + cardNumber, 
+                                            createAuditDetails("getCardDetails", "NOT_FOUND", cardNumber));
                 throw new CardNotFoundException("Card not found", cardNumber);
             }
             
         } catch (CardValidationException e) {
             logger.warn("Invalid card number provided: {}", cardNumber);
-            auditService.logSecurityEvent(principal.getName(), "CARD_INVALID", "VALIDATION_ERROR", 
-                                        1, createAuditDetails("getCardDetails", "VALIDATION_ERROR", cardNumber));
+            auditService.logSecurityEvent("CARD_INVALID", "VALIDATION_ERROR", 
+                                        "Invalid card number: " + cardNumber, 
+                                        createAuditDetails("getCardDetails", "VALIDATION_ERROR", cardNumber));
             throw e;
         } catch (CardNotFoundException e) {
             logger.warn("Card not found: {}", cardNumber);
             throw e;
         } catch (Exception e) {
             logger.error("Error in getCardDetails", e);
-            auditService.logSecurityEvent(principal.getName(), "CARD_DETAIL_ERROR", "READ_ERROR", 
-                                        1, createAuditDetails("getCardDetails", "ERROR: " + e.getMessage(), cardNumber));
+            auditService.logSecurityEvent("CARD_DETAIL_ERROR", "READ_ERROR", 
+                                        "ERROR: " + e.getMessage(), 
+                                        createAuditDetails("getCardDetails", "ERROR", cardNumber));
             throw new RuntimeException("Error retrieving card details", e);
         }
     }
@@ -388,8 +398,10 @@ public class CardController {
                 throw new CardValidationException("CARD ID FILTER,IF SUPPLIED MUST BE A 16 DIGIT NUMBER");
             }
             
-            // Validate card update data
-            cardValidator.validateCardUpdate(cardUpdateDTO);
+            // Validate card update data (basic validation)
+            if (cardUpdateDTO == null) {
+                throw new CardValidationException("Card update data cannot be null");
+            }
             
             // Store navigation context in session
             Map<String, Object> cardContext = new HashMap<>();
@@ -399,7 +411,7 @@ public class CardController {
             sessionManagementService.setSessionAttribute(request, SESSION_ATTR_CARD_CONTEXT, cardContext);
             
             // Delegate to specialized card update service
-            CardDetailDTO updatedCard = cardUpdateService.updateCard(cardNumber, cardUpdateDTO);
+            CardDetailDTO updatedCard = cardUpdateService.updateCardDetails(cardNumber, cardUpdateDTO);
             
             // Log successful operation
             auditService.logDataAccessEvent(principal.getName(), "CARDS", "UPDATE", 
@@ -409,18 +421,21 @@ public class CardController {
             
         } catch (CardValidationException e) {
             logger.warn("Validation error in updateCard: {}", e.getMessage());
-            auditService.logSecurityEvent(principal.getName(), "CARD_UPDATE_VALIDATION", "VALIDATION_ERROR", 
-                                        1, createAuditDetails("updateCard", "VALIDATION_ERROR", cardNumber));
+            auditService.logSecurityEvent("CARD_UPDATE_VALIDATION", "VALIDATION_ERROR", 
+                                        "Validation error: " + e.getMessage(), 
+                                        createAuditDetails("updateCard", "VALIDATION_ERROR", cardNumber));
             throw e;
         } catch (CardNotFoundException e) {
             logger.warn("Card not found for update: {}", cardNumber);
-            auditService.logSecurityEvent(principal.getName(), "CARD_UPDATE_NOT_FOUND", "READ_ERROR", 
-                                        1, createAuditDetails("updateCard", "NOT_FOUND", cardNumber));
+            auditService.logSecurityEvent("CARD_UPDATE_NOT_FOUND", "READ_ERROR", 
+                                        "Card not found: " + cardNumber, 
+                                        createAuditDetails("updateCard", "NOT_FOUND", cardNumber));
             throw e;
         } catch (Exception e) {
             logger.error("Error in updateCard", e);
-            auditService.logSecurityEvent(principal.getName(), "CARD_UPDATE_ERROR", "UPDATE_ERROR", 
-                                        1, createAuditDetails("updateCard", "ERROR: " + e.getMessage(), cardNumber));
+            auditService.logSecurityEvent("CARD_UPDATE_ERROR", "UPDATE_ERROR", 
+                                        "ERROR: " + e.getMessage(), 
+                                        createAuditDetails("updateCard", "ERROR", cardNumber));
             throw new RuntimeException("Error updating card", e);
         }
     }
@@ -490,35 +505,27 @@ public class CardController {
             // Perform search based on available criteria
             CardListDTO searchResults;
             if (accountId != null && !accountId.trim().isEmpty()) {
-                searchResults = cardListService.getCardListByAccountId(accountId, pageable);
+                org.springframework.data.domain.Page<Card> cardPage = cardListService.getCardListByAccountIdWithPagination(accountId, pageable);
+                searchResults = cardListService.buildCardListResponse(cardPage);
             } else if (cardNumber != null && !cardNumber.trim().isEmpty()) {
                 // For single card search, create a list with the card if found
-                Optional<CardDetailDTO> cardDetail = cardDetailService.getCardDetails(cardNumber);
-                if (cardDetail.isPresent()) {
+                CardDetailDTO cardDetail = cardDetailService.getCardDetails(cardNumber);
+                if (cardDetail != null) {
                     List<CardListDTO.CardSummary> cardSummaries = new ArrayList<>();
                     CardListDTO.CardSummary summary = new CardListDTO.CardSummary();
-                    summary.setCardNumber(cardDetail.get().getCardNumber());
-                    summary.setAccountId(cardDetail.get().getAccountId());
-                    summary.setCardStatus(cardDetail.get().getCardStatus());
+                    summary.setCardNumber(cardDetail.getCardNumber());
+                    summary.setAccountNumber(cardDetail.getAccountId());
+                    summary.setCardStatus(cardDetail.getCardStatus());
                     cardSummaries.add(summary);
                     
-                    searchResults = new CardListDTO();
-                    searchResults.setCards(cardSummaries);
-                    searchResults.setCurrentPage(1);
-                    searchResults.setTotalPages(1);
-                    searchResults.setTotalElements(1);
-                    searchResults.setPageSize(1);
+                    searchResults = new CardListDTO(cardSummaries, 1, 1, 1L);
                 } else {
-                    searchResults = new CardListDTO();
-                    searchResults.setCards(new ArrayList<>());
-                    searchResults.setCurrentPage(1);
-                    searchResults.setTotalPages(0);
-                    searchResults.setTotalElements(0);
-                    searchResults.setPageSize(size);
+                    searchResults = new CardListDTO(new ArrayList<>(), 1, size, 0L);
                 }
             } else {
                 // No specific criteria, return all cards with pagination
-                searchResults = cardListService.getCardListWithPagination(pageable);
+                org.springframework.data.domain.Page<Card> cardPage = cardListService.getCardListWithPagination(pageable);
+                searchResults = cardListService.buildCardListResponse(cardPage);
             }
             
             // Log successful operation
@@ -530,13 +537,15 @@ public class CardController {
             
         } catch (CardValidationException e) {
             logger.warn("Validation error in searchCards: {}", e.getMessage());
-            auditService.logSecurityEvent(principal.getName(), "CARD_SEARCH_VALIDATION", "VALIDATION_ERROR", 
-                                        1, createAuditDetails("searchCards", "VALIDATION_ERROR", accountId, cardNumber, status));
+            auditService.logSecurityEvent("CARD_SEARCH_VALIDATION", "VALIDATION_ERROR", 
+                                        "Validation error: " + e.getMessage(), 
+                                        createAuditDetails("searchCards", "VALIDATION_ERROR", accountId, cardNumber, status));
             throw e;
         } catch (Exception e) {
             logger.error("Error in searchCards", e);
-            auditService.logSecurityEvent(principal.getName(), "CARD_SEARCH_ERROR", "SEARCH_ERROR", 
-                                        1, createAuditDetails("searchCards", "ERROR: " + e.getMessage(), accountId, cardNumber, status));
+            auditService.logSecurityEvent("CARD_SEARCH_ERROR", "SEARCH_ERROR", 
+                                        "ERROR: " + e.getMessage(), 
+                                        createAuditDetails("searchCards", "ERROR", accountId, cardNumber, status));
             throw new RuntimeException("Error performing card search", e);
         }
     }
@@ -614,8 +623,9 @@ public class CardController {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth != null ? auth.getName() : "UNKNOWN";
         
-        auditService.logSecurityEvent(username, "ACCESS_DENIED", "AUTHORIZATION_ERROR", 
-                                    1, createAuditDetails("securityException", "ACCESS_DENIED", request.getRequestURI()));
+        auditService.logSecurityEvent("ACCESS_DENIED", "AUTHORIZATION_ERROR", 
+                                    "Access denied for user: " + username, 
+                                    createAuditDetails("securityException", "ACCESS_DENIED", request.getRequestURI()));
         
         Map<String, Object> errorResponse = new HashMap<>();
         errorResponse.put("error", "ACCESS_DENIED");
@@ -646,8 +656,9 @@ public class CardController {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth != null ? auth.getName() : "UNKNOWN";
         
-        auditService.logSecurityEvent(username, "SYSTEM_ERROR", "INTERNAL_ERROR", 
-                                    1, createAuditDetails("generalException", "INTERNAL_ERROR", request.getRequestURI()));
+        auditService.logSecurityEvent("SYSTEM_ERROR", "INTERNAL_ERROR", 
+                                    "Internal error for user: " + username, 
+                                    createAuditDetails("generalException", "INTERNAL_ERROR", request.getRequestURI()));
         
         Map<String, Object> errorResponse = new HashMap<>();
         errorResponse.put("error", "INTERNAL_SERVER_ERROR");
