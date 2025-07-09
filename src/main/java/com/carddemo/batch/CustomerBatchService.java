@@ -9,7 +9,7 @@ import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
-import javax.validation.Validator;
+import jakarta.validation.Validator;
 import java.util.List;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -132,8 +132,8 @@ public class CustomerBatchService {
         
         try {
             // Audit log processing start
-            auditService.logDataAccessEvent("SYSTEM", "CUSTOMER_BATCH_START", 
-                                          "CUSTOMER_DATA", "READ", 
+            auditService.logDataAccessEvent("SYSTEM", "CUSTOMER_DATA", 
+                                          "BATCH_START", 0, 
                                           java.util.Map.of("job_name", CUSTOMER_BATCH_JOB_NAME,
                                                          "processing_parameters", processingParameters));
             
@@ -171,8 +171,8 @@ public class CustomerBatchService {
                        result.getValidationErrors(), result.getCrossReferencesProcessed());
             
             // Audit log processing completion
-            auditService.logDataAccessEvent("SYSTEM", "CUSTOMER_BATCH_COMPLETE", 
-                                          "CUSTOMER_DATA", "WRITE", 
+            auditService.logDataAccessEvent("SYSTEM", "CUSTOMER_DATA", 
+                                          "BATCH_COMPLETE", result.getRecordsProcessed(), 
                                           java.util.Map.of("job_name", CUSTOMER_BATCH_JOB_NAME,
                                                          "processing_duration_ms", processingDuration,
                                                          "records_processed", result.getRecordsProcessed(),
@@ -191,8 +191,8 @@ public class CustomerBatchService {
             result.setErrorMessage(e.getMessage());
             
             // Audit log processing failure
-            auditService.logDataAccessEvent("SYSTEM", "CUSTOMER_BATCH_FAILED", 
-                                          "CUSTOMER_DATA", "ERROR", 
+            auditService.logDataAccessEvent("SYSTEM", "CUSTOMER_DATA", 
+                                          "BATCH_FAILED", 0, 
                                           java.util.Map.of("job_name", CUSTOMER_BATCH_JOB_NAME,
                                                          "error_message", e.getMessage(),
                                                          "error_type", e.getClass().getSimpleName()));
@@ -759,8 +759,8 @@ public class CustomerBatchService {
             }
             
             // Log audit event using AuditService
-            auditService.logDataAccessEvent("SYSTEM", changeType, 
-                                          "CUSTOMER_DATA", "MODIFY", 
+            auditService.logDataAccessEvent("SYSTEM", "CUSTOMER_DATA", 
+                                          changeType, 1, 
                                           auditDetails);
             
         } catch (Exception e) {
