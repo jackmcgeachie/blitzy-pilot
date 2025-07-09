@@ -7,9 +7,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Optional;
 import java.util.ArrayList;
@@ -951,7 +954,12 @@ public class CardListService {
 
     private String getUserTypeFromSession() {
         try {
-            return (String) sessionManagementService.getSessionAttribute(SESSION_USER_TYPE);
+            HttpServletRequest request = getCurrentRequest();
+            if (request != null) {
+                Optional<Object> userType = sessionManagementService.getSessionAttribute(request, SESSION_USER_TYPE);
+                return userType.map(Object::toString).orElse(REGULAR_USER_TYPE);
+            }
+            return REGULAR_USER_TYPE;
         } catch (Exception e) {
             logger.debug("Error getting user type from session, defaulting to REGULAR_USER_TYPE", e);
             return REGULAR_USER_TYPE;
@@ -960,7 +968,12 @@ public class CardListService {
 
     private String getAccountFilterFromSession() {
         try {
-            return (String) sessionManagementService.getSessionAttribute(SESSION_ACCOUNT_FILTER);
+            HttpServletRequest request = getCurrentRequest();
+            if (request != null) {
+                Optional<Object> accountFilter = sessionManagementService.getSessionAttribute(request, SESSION_ACCOUNT_FILTER);
+                return accountFilter.map(Object::toString).orElse(null);
+            }
+            return null;
         } catch (Exception e) {
             logger.debug("Error getting account filter from session", e);
             return null;
@@ -969,7 +982,12 @@ public class CardListService {
 
     private String getCardFilterFromSession() {
         try {
-            return (String) sessionManagementService.getSessionAttribute(SESSION_CARD_FILTER);
+            HttpServletRequest request = getCurrentRequest();
+            if (request != null) {
+                Optional<Object> cardFilter = sessionManagementService.getSessionAttribute(request, SESSION_CARD_FILTER);
+                return cardFilter.map(Object::toString).orElse(null);
+            }
+            return null;
         } catch (Exception e) {
             logger.debug("Error getting card filter from session", e);
             return null;
@@ -978,7 +996,12 @@ public class CardListService {
 
     private Integer getCurrentPageFromSession() {
         try {
-            return (Integer) sessionManagementService.getSessionAttribute(SESSION_CURRENT_PAGE);
+            HttpServletRequest request = getCurrentRequest();
+            if (request != null) {
+                Optional<Object> currentPage = sessionManagementService.getSessionAttribute(request, SESSION_CURRENT_PAGE);
+                return currentPage.map(obj -> (Integer) obj).orElse(0);
+            }
+            return 0;
         } catch (Exception e) {
             logger.debug("Error getting current page from session", e);
             return 0;
@@ -987,7 +1010,10 @@ public class CardListService {
 
     private void updateSessionCurrentPage(int pageNumber) {
         try {
-            sessionManagementService.setSessionAttribute(SESSION_CURRENT_PAGE, pageNumber);
+            HttpServletRequest request = getCurrentRequest();
+            if (request != null) {
+                sessionManagementService.setSessionAttribute(request, SESSION_CURRENT_PAGE, pageNumber);
+            }
         } catch (Exception e) {
             logger.debug("Error updating current page in session", e);
         }
@@ -995,7 +1021,10 @@ public class CardListService {
 
     private void updateSessionAccountFilter(String accountId) {
         try {
-            sessionManagementService.setSessionAttribute(SESSION_ACCOUNT_FILTER, accountId);
+            HttpServletRequest request = getCurrentRequest();
+            if (request != null) {
+                sessionManagementService.setSessionAttribute(request, SESSION_ACCOUNT_FILTER, accountId);
+            }
         } catch (Exception e) {
             logger.debug("Error updating account filter in session", e);
         }
@@ -1003,7 +1032,10 @@ public class CardListService {
 
     private void updateSessionCardFilter(String cardStatus) {
         try {
-            sessionManagementService.setSessionAttribute(SESSION_CARD_FILTER, cardStatus);
+            HttpServletRequest request = getCurrentRequest();
+            if (request != null) {
+                sessionManagementService.setSessionAttribute(request, SESSION_CARD_FILTER, cardStatus);
+            }
         } catch (Exception e) {
             logger.debug("Error updating card filter in session", e);
         }
@@ -1011,16 +1043,34 @@ public class CardListService {
 
     private String getCurrentUserId() {
         try {
-            // Get current user from session or security context
-            Object transactionContext = sessionManagementService.getTransactionContext();
-            if (transactionContext instanceof java.util.Map) {
-                java.util.Map<?, ?> contextMap = (java.util.Map<?, ?>) transactionContext;
-                return (String) contextMap.get("user_id");
+            HttpServletRequest request = getCurrentRequest();
+            if (request != null) {
+                // Get current user from session or security context
+                SessionManagementService.TransactionContext transactionContext = sessionManagementService.getTransactionContext(request);
+                if (transactionContext != null) {
+                    Object userId = transactionContext.getTemporaryData().get("user_id");
+                    return userId != null ? userId.toString() : "UNKNOWN_USER";
+                }
             }
             return "UNKNOWN_USER";
         } catch (Exception e) {
             logger.debug("Error getting current user ID", e);
             return "UNKNOWN_USER";
+        }
+    }
+
+    /**
+     * Gets the current HttpServletRequest from the RequestContextHolder
+     * 
+     * @return Current HttpServletRequest or null if not available
+     */
+    private HttpServletRequest getCurrentRequest() {
+        try {
+            ServletRequestAttributes requestAttributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            return requestAttributes != null ? requestAttributes.getRequest() : null;
+        } catch (Exception e) {
+            logger.debug("Error getting current request from RequestContextHolder", e);
+            return null;
         }
     }
 }
